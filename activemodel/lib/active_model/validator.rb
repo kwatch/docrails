@@ -60,6 +60,9 @@ module ActiveModel
   #     end
   #   end
   #
+  # Note that the validator is initialized only once for the whole application
+  # lifecycle, and not on each validation run.
+  #
   # The easiest way to add custom validators for validating individual attributes
   # is with the convenient <tt>ActiveModel::EachValidator</tt>.
   #
@@ -103,7 +106,7 @@ module ActiveModel
     end
 
     # Accepts options that will be made available through the +options+ reader.
-    def initialize(options)
+    def initialize(options = {})
       @options = options.freeze
     end
 

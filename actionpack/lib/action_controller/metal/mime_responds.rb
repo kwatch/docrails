@@ -1,3 +1,4 @@
+require 'active_support/core_ext/array/extract_options'
 require 'abstract_controller/collector'
 
 module ActionController #:nodoc:
@@ -419,7 +420,7 @@ module ActionController #:nodoc:
       end
 
       def response
-        @responses[format] || @responses[Mime::ALL]
+        @responses.fetch(format, @responses[Mime::ALL])
       end
 
       def negotiate_format(request)

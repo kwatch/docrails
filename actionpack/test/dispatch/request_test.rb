@@ -13,6 +13,9 @@ class RequestTest < ActiveSupport::TestCase
 
     assert_equal '/books', url_for(:only_path => true, :path => '/books')
 
+    assert_equal 'http://www.example.com/books/?q=code', url_for(trailing_slash: true, path: '/books?q=code')
+    assert_equal 'http://www.example.com/books/?spareslashes=////', url_for(trailing_slash: true, path: '/books?spareslashes=////')
+
     assert_equal 'http://www.example.com',  url_for
     assert_equal 'http://api.example.com',  url_for(:subdomain => 'api')
     assert_equal 'http://example.com',      url_for(:subdomain => false)
@@ -462,6 +465,27 @@ class RequestTest < ActiveSupport::TestCase
     assert request.put?
   end
 
+  test "post uneffected by local inflections" do
+    existing_acrnoyms = ActiveSupport::Inflector.inflections.acronyms.dup
+    existing_acrnoym_regex = ActiveSupport::Inflector.inflections.acronym_regex.dup
+    begin
+      ActiveSupport::Inflector.inflections do |inflect|
+        inflect.acronym "POS"
+      end
+      assert_equal "pos_t", "POST".underscore
+      request = stub_request "REQUEST_METHOD" => "POST"
+      assert_equal :post, ActionDispatch::Request::HTTP_METHOD_LOOKUP["POST"]
+      assert_equal :post, request.method_symbol
+      assert request.post?
+    ensure
+      # Reset original acronym set
+      ActiveSupport::Inflector.inflections do |inflect|
+        inflect.send(:instance_variable_set,"@acronyms",existing_acrnoyms)
+        inflect.send(:instance_variable_set,"@acronym_regex",existing_acrnoym_regex)
+      end
+    end
+  end
+
   test "xml format" do
     request = stub_request
     request.expects(:parameters).at_least_once.returns({ :format => 'xml' })
@@ -566,6 +590,15 @@ class RequestTest < ActiveSupport::TestCase
     request.expects(:parameters).at_least_once.returns({})
     assert_equal [Mime::HTML], request.formats
 
+    request = stub_request 'HTTP_ACCEPT' => ''
+    request.expects(:parameters).at_least_once.returns({})
+    assert_equal [Mime::HTML], request.formats
+
+    request = stub_request 'HTTP_ACCEPT' => '',
+                           'HTTP_X_REQUESTED_WITH' => "XMLHttpRequest"
+    request.expects(:parameters).at_least_once.returns({})
+    assert_equal [Mime::JS], request.formats
+    
     request = stub_request 'CONTENT_TYPE' => 'application/xml; charset=UTF-8',
                            'HTTP_X_REQUESTED_WITH' => "XMLHttpRequest"
     request.expects(:parameters).at_least_once.returns({})

@@ -85,7 +85,7 @@ You can also run any single test separately:
 $ ARCONN=sqlite3 ruby -Itest test/cases/associations/has_many_associations_test.rb
 ```
 
-You can invoke `test_jdbcmysql`, `test_jdbcsqlite3` or `test_jdbcpostgresql` also. See the file `activerecord/RUNNING_UNIT_TESTS` for information on running more targeted database tests, or the file `ci/travis.rb` for the test suite run by the continuous integration server.
+You can invoke `test_jdbcmysql`, `test_jdbcsqlite3` or `test_jdbcpostgresql` also. See the file `activerecord/RUNNING_UNIT_TESTS.rdoc` for information on running more targeted database tests, or the file `ci/travis.rb` for the test suite run by the continuous integration server.
 
 ### Warnings
 
@@ -216,6 +216,7 @@ Rails follows a simple set of coding style conventions:
 * Use `MyClass.my_method(my_arg)` not `my_method( my_arg )` or `my_method my_arg`.
 * Use `a = b` and not `a=b`.
 * Use assert_not methods instead of refute.
+* Prefer `method { do_stuff }` instead of `method{do_stuff}` for single-line blocks.
 * Follow the conventions in the source you see used already.
 
 The above are guidelines — please use your best judgment in using them.
@@ -248,8 +249,6 @@ Your name can be added directly after the last word if you don't provide any cod
 ### Sanity Check
 
 You should not be the only person who looks at the code before you submit it. You know at least one other Rails developer, right? Show them what you’re doing and ask for feedback. Doing this in private before you push a patch out publicly is the “smoke test” for a patch: if you can’t convince one other developer of the beauty of your code, you’re unlikely to convince the core team either.
-
-You might want also to check out the [RailsBridge BugMash](http://wiki.railsbridge.org/projects/railsbridge/wiki/BugMash) as a way to get involved in a group effort to improve Rails. This can help you get started and help you check your code when you're writing your first patches.
 
 ### Commit Your Changes
 

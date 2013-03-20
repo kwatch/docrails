@@ -1233,6 +1233,8 @@ The method `squish` strips leading and trailing whitespace, and substitutes runs
 
 There's also the destructive version `String#squish!`.
 
+Note that it handles both ASCII and Unicode whitespace like mongolian vowel separator (U+180E).
+
 NOTE: Defined in `active_support/core_ext/string/filters.rb`.
 
 ### `truncate`
@@ -1342,7 +1344,7 @@ The second argument, `indent_string`, specifies which indent string to use. The 
 "foo".indent(2, "\t")    # => "\t\tfoo"
 ```
 
-While `indent_string` is tipically one space or tab, it may be any string.
+While `indent_string` is typically one space or tab, it may be any string.
 
 The third argument, `indent_empty_lines`, is a flag that says whether empty lines should be indented. Default is false.
 
@@ -3318,7 +3320,25 @@ date.end_of_hour # => Mon Jun 07 19:59:59 +0200 2010
 
 `beginning_of_hour` is aliased to `at_beginning_of_hour`.
 
-INFO: `beginning_of_hour` and `end_of_hour` are implemented for `Time` and `DateTime` but **not** `Date` as it does not make sense to request the beginning or end of an hour on a `Date` instance.
+##### `beginning_of_minute`, `end_of_minute`
+
+The method `beginning_of_minute` returns a timestamp at the beginning of the minute (hh:mm:00):
+
+```ruby
+date = DateTime.new(2010, 6, 7, 19, 55, 25)
+date.beginning_of_minute # => Mon Jun 07 19:55:00 +0200 2010
+```
+
+The method `end_of_minute` returns a timestamp at the end of the minute (hh:mm:59):
+
+```ruby
+date = DateTime.new(2010, 6, 7, 19, 55, 25)
+date.end_of_minute # => Mon Jun 07 19:55:59 +0200 2010
+```
+
+`beginning_of_minute` is aliased to `at_beginning_of_minute`.
+
+INFO: `beginning_of_hour`, `end_of_hour`, `beginning_of_minute` and `end_of_minute` are implemented for `Time` and `DateTime` but **not** `Date` as it does not make sense to request the beginning or end of an hour or minute on a `Date` instance.
 
 ##### `ago`, `since`
 

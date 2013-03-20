@@ -1,5 +1,89 @@
 ## Rails 4.0.0 (unreleased) ##
 
+
+## Rails 4.0.0.beta1 (February 25, 2013) ##
+*   Change Service pages(404, etc). *Stanislav Sobolev*
+
+*   Improve `rake stats` for JavaScript and CoffeeScript: ignore block comments
+    and calculates number of functions.
+
+    *Hendy Tanata*
+
+*   Ability to use a custom builder by passing `--builder` (or `-b`) has been removed. Consider
+    using application template instead. See this guide for more detail:
+    http://guides.rubyonrails.org/rails_application_templates.html
+
+    *Prem Sichanugrist*
+
+*   fix rake db:* tasks to work with DATABASE_URL and without config/database.yml
+
+    *Terence Lee*
+
+*   Add notice message for destroy action in scaffold generator.
+
+    *Rahul P. Chaudhari*
+
+*   Add two new test rake tasks to speed up full test runs.
+
+    * `test:all`: run tests quickly by merging all types and not resetting db.
+    * `test:all:db`: run tests quickly, but also reset db.
+
+    *Ryan Davis*
+
+*   Add `--rc` option to support the load of a custom rc file during the generation of a new app.
+
+    *Amparo Luna*
+
+*   Add `--no-rc` option to skip the loading of railsrc file during the generation of a new app.
+
+    *Amparo Luna*
+
+*   Fixes database.yml when creating a new rails application with '.'
+    Fix #8304
+
+    *Jeremy W. Rowe*
+
+*   Restore Rails::Engine::Railties#engines with deprecation to ensure
+    compatibility with gems such as Thinking Sphinx
+    Fix #8551
+
+    *Tim Raymond*
+
+*   Specify which logs to clear when using the `rake log:clear` task.
+    (e.g. rake log:clear LOGS=test,staging)
+
+    *Matt Bridges*
+
+*   Allow a `:dirs` key in the `SourceAnnotationExtractor.enumerate` options
+    to explicitly set the directories to be traversed so it's easier to define
+    custom rake tasks.
+
+    *Brian D. Burns*
+
+*   Deprecate `Rails::Generators::ActiveModel#update_attributes` in favor of `#update`.
+
+    ORMs that implement `Generators::ActiveModel#update_attributes` should change
+    to `#update`. Scaffold controller generators should change calls like:
+
+        @orm_instance.update_attributes(...)
+
+    to:
+
+        @orm_instance.update(...)
+
+    This goes along with the addition of `ActiveRecord::Base#update`.
+
+    *Carlos Antonio da Silva*
+
+*   Include `jbuilder` by default and rely on its scaffold generator to show json API.
+    Check https://github.com/rails/jbuilder for more info and examples.
+
+    *DHH*
+
+*   Scaffold now generates HTML-only controller by default.
+
+    *DHH + Pavel Pravosud*
+
 *   The generated `README.rdoc` for new applications invites the user to
     document the necessary steps to get the application up and running.
 

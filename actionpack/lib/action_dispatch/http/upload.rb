@@ -6,7 +6,7 @@ module ActionDispatch
     # of its interface is available directly for convenience.
     #
     # Uploaded files are temporary files whose lifespan is one request. When
-    # the object is finalized Ruby unlinks the file, so there is not need to
+    # the object is finalized Ruby unlinks the file, so there is no need to
     # clean them with a separate maintenance task.
     class UploadedFile
       # The basename of the file in the client.
@@ -70,7 +70,7 @@ module ActionDispatch
 
       def encode_filename(filename)
         # Encode the filename in the utf8 encoding, unless it is nil
-        filename.force_encoding("UTF-8").encode! if filename
+        filename.force_encoding(Encoding::UTF_8).encode! if filename
       end
     end
 

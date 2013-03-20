@@ -1,5 +1,8 @@
 module ActiveRecord
   module Tasks # :nodoc:
+    class DatabaseAlreadyExists < StandardError; end # :nodoc:
+    class DatabaseNotSupported < StandardError; end # :nodoc:
+
     module DatabaseTasks # :nodoc:
       extend self
 
@@ -32,6 +35,8 @@ module ActiveRecord
       def create(*arguments)
         configuration = arguments.first
         class_for_adapter(configuration['adapter']).new(*arguments).create
+      rescue DatabaseAlreadyExists
+        $stderr.puts "#{configuration['database']} already exists"
       rescue Exception => error
         $stderr.puts error, *(error.backtrace)
         $stderr.puts "Couldn't create database for #{configuration.inspect}"
@@ -117,6 +122,9 @@ module ActiveRecord
 
       def class_for_adapter(adapter)
         key = @tasks.keys.detect { |pattern| adapter[pattern] }
+        unless key
+          raise DatabaseNotSupported, "Rake tasks not supported by '#{adapter}' adapter"
+        end
         @tasks[key]
       end
 

@@ -47,7 +47,6 @@ module ActionDispatch
 
   autoload_under 'middleware' do
     autoload :RequestId
-    autoload :BestStandardsSupport
     autoload :Callbacks
     autoload :Cookies
     autoload :DebugExceptions
@@ -97,7 +96,6 @@ module ActionDispatch
     autoload :Assertions
     autoload :Integration
     autoload :IntegrationTest, 'action_dispatch/testing/integration'
-    autoload :PerformanceTest
     autoload :TestProcess
     autoload :TestRequest
     autoload :TestResponse

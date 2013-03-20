@@ -21,14 +21,12 @@ module ActionDispatch
     module Compatibility
       def initialize(app, options = {})
         options[:key] ||= '_session_id'
-        # FIXME Rack's secret is not being used
-        options[:secret] ||= SecureRandom.hex(30)
         super
       end
 
       def generate_sid
         sid = SecureRandom.hex(16)
-        sid.encode!('UTF-8')
+        sid.encode!(Encoding::UTF_8)
         sid
       end
 

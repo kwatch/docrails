@@ -16,7 +16,7 @@ require 'pg'
 require 'ipaddr'
 
 module ActiveRecord
-  module ConnectionHandling
+  module ConnectionHandling # :nodoc:
     VALID_CONN_PARAMS = [:host, :hostaddr, :port, :dbname, :user, :password, :connect_timeout,
                          :client_encoding, :options, :application_name, :fallback_application_name,
                          :keepalives, :keepalives_idle, :keepalives_interval, :keepalives_count,
@@ -24,7 +24,7 @@ module ActiveRecord
                          :requirepeer, :krbsrvname, :gsslib, :service]
 
     # Establishes a connection to the database that's used by all Active Record objects
-    def postgresql_connection(config) # :nodoc:
+    def postgresql_connection(config)
       conn_params = config.symbolize_keys
 
       conn_params.delete_if { |_, v| v.nil? }
@@ -77,6 +77,8 @@ module ActiveRecord
         return default unless default
 
         case default
+          when /\A'(.*)'::(num|date|tstz|ts|int4|int8)range\z/m
+            $1
           # Numeric types
           when /\A\(?(-?\d+(\.\d*)?\)?)\z/
             $1
@@ -116,9 +118,6 @@ module ActiveRecord
             $1
           # JSON
           when /\A'(.*)'::json\z/
-            $1
-          # int4range, int8range
-          when /\A'(.*)'::int(4|8)range\z/
             $1
           # Object identifier types
           when /\A-?\d+\z/
@@ -220,12 +219,11 @@ module ActiveRecord
           # JSON type
           when 'json'
             :json
-          # int4range, int8range types
-          when 'int4range', 'int8range'
-            :intrange
           # Small and big integer types
           when /^(?:small|big)int$/
             :integer
+          when /(num|date|tstz|ts|int4|int8)range$/
+            field_type.to_sym
           # Pass through all types that are not specific to PostgreSQL.
           else
             super
@@ -265,7 +263,7 @@ module ActiveRecord
         attr_accessor :array
       end
 
-      class TableDefinition < ActiveRecord::ConnectionAdapters::TableDefinition
+      module ColumnMethods
         def xml(*args)
           options = args.extract_options!
           column(args[0], 'xml', options)
@@ -274,6 +272,30 @@ module ActiveRecord
         def tsvector(*args)
           options = args.extract_options!
           column(args[0], 'tsvector', options)
+        end
+
+        def int4range(name, options = {})
+          column(name, 'int4range', options)
+        end
+
+        def int8range(name, options = {})
+          column(name, 'int8range', options)
+        end
+
+        def tsrange(name, options = {})
+          column(name, 'tsrange', options)
+        end
+
+        def tstzrange(name, options = {})
+          column(name, 'tstzrange', options)
+        end
+
+        def numrange(name, options = {})
+          column(name, 'numrange', options)
+        end
+
+        def daterange(name, options = {})
+          column(name, 'daterange', options)
         end
 
         def hstore(name, options = {})
@@ -303,10 +325,10 @@ module ActiveRecord
         def json(name, options = {})
           column(name, 'json', options)
         end
+      end
 
-        def intrange(name, options = {})
-          column(name, 'intrange', options)
-        end
+      class TableDefinition < ActiveRecord::ConnectionAdapters::TableDefinition
+        include ColumnMethods
 
         def column(name, type = nil, options = {})
           super
@@ -326,6 +348,10 @@ module ActiveRecord
         end
       end
 
+      class Table < ActiveRecord::ConnectionAdapters::Table
+        include ColumnMethods
+      end
+
       ADAPTER_NAME = 'PostgreSQL'
 
       NATIVE_DATABASE_TYPES = {
@@ -339,6 +365,12 @@ module ActiveRecord
         timestamp:   { name: "timestamp" },
         time:        { name: "time" },
         date:        { name: "date" },
+        daterange:   { name: "daterange" },
+        numrange:    { name: "numrange" },
+        tsrange:     { name: "tsrange" },
+        tstzrange:   { name: "tstzrange" },
+        int4range:   { name: "int4range" },
+        int8range:   { name: "int8range" },
         binary:      { name: "bytea" },
         boolean:     { name: "boolean" },
         xml:         { name: "xml" },
@@ -349,7 +381,6 @@ module ActiveRecord
         macaddr:     { name: "macaddr" },
         uuid:        { name: "uuid" },
         json:        { name: "json" },
-        intrange:    { name: "int4range" },
         ltree:       { name: "ltree" }
       }
 
@@ -455,10 +486,10 @@ module ActiveRecord
       def initialize(connection, logger, connection_parameters, config)
         super(connection, logger)
 
-        if config.fetch(:prepared_statements) { true }
+        if self.class.type_cast_config_to_boolean(config.fetch(:prepared_statements) { true })
           @visitor = Arel::Visitors::PostgreSQL.new self
         else
-          @visitor = BindSubstitution.new self
+          @visitor = unprepared_visitor
         end
 
         @connection_parameters, @config = connection_parameters, config
@@ -469,7 +500,7 @@ module ActiveRecord
 
         connect
         @statements = StatementPool.new @connection,
-                                        config.fetch(:statement_limit) { 1000 }
+                                        self.class.type_cast_config_to_integer(config.fetch(:statement_limit) { 1000 })
 
         if postgresql_version < 80200
           raise "Your version of PostgreSQL (#{postgresql_version}) is too old, please upgrade!"
@@ -477,7 +508,7 @@ module ActiveRecord
 
         initialize_type_map
         @local_tz = execute('SHOW TIME ZONE', 'SCHEMA').first["TimeZone"]
-        @use_insert_returning = @config.key?(:insert_returning) ? @config[:insert_returning] : true
+        @use_insert_returning = @config.key?(:insert_returning) ? self.class.type_cast_config_to_boolean(@config[:insert_returning]) : true
       end
 
       # Clears the prepared statements cache.
@@ -552,6 +583,45 @@ module ActiveRecord
         true
       end
 
+      # Returns true if pg > 9.2
+      def supports_extensions?
+        postgresql_version >= 90200
+      end
+
+      # Range datatypes weren't introduced until PostgreSQL 9.2
+      def supports_ranges?
+        postgresql_version >= 90200
+      end
+
+      def enable_extension(name)
+        exec_query("CREATE EXTENSION IF NOT EXISTS #{name}").tap {
+          reload_type_map
+        }
+      end
+
+      def disable_extension(name)
+        exec_query("DROP EXTENSION IF EXISTS #{name} CASCADE").tap {
+          reload_type_map
+        }
+      end
+
+      def extension_enabled?(name)
+        if supports_extensions?
+          res = exec_query "SELECT EXISTS(SELECT * FROM pg_available_extensions WHERE name = '#{name}' AND installed_version IS NOT NULL)",
+            'SCHEMA'
+          res.column_types['exists'].type_cast res.rows.first.first
+        end
+      end
+
+      def extensions
+        if supports_extensions?
+          res = exec_query "SELECT extname from pg_extension", "SCHEMA"
+          res.rows.map { |r| res.column_types['extname'].type_cast r.first }
+        else
+          super
+        end
+      end
+
       # Returns the configured supported identifier length supported by PostgreSQL
       def table_alias_length
         @table_alias_length ||= query('SHOW max_identifier_length', 'SCHEMA')[0][0].to_i
@@ -605,6 +675,8 @@ module ActiveRecord
         UNIQUE_VIOLATION      = "23505"
 
         def translate_exception(exception, message)
+          return exception unless exception.respond_to?(:result)
+
           case exception.result.try(:error_field, PGresult::PG_DIAG_SQLSTATE)
           when UNIQUE_VIOLATION
             RecordNotUnique.new(message, exception)
@@ -616,6 +688,11 @@ module ActiveRecord
         end
 
       private
+
+        def reload_type_map
+          OID::TYPE_MAP.clear
+          initialize_type_map
+        end
 
         def initialize_type_map
           result = execute('SELECT oid, typname, typelem, typdelim, typinput FROM pg_type', 'SCHEMA')
@@ -817,8 +894,12 @@ module ActiveRecord
           $1.strip if $1
         end
 
-        def table_definition
+        def create_table_definition
           TableDefinition.new(self)
+        end
+
+        def update_table_definition(table_name, base)
+          Table.new(table_name, base)
         end
     end
   end

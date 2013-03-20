@@ -45,7 +45,7 @@ end
 
 task default: :test
 
-desc 'Runs test:units, test:functionals, test:integration together (also available: test:benchmark, test:profile)'
+desc 'Runs test:units, test:functionals, test:integration together'
 task :test do
   Rake::Task[ENV['TEST'] ? 'test:single' : 'test:run'].invoke
 end
@@ -69,6 +69,18 @@ namespace :test do
       puts errors.map { |e| "Errors running #{e[:task]}! #{e[:exception].inspect}" }.join("\n")
       abort
     end
+  end
+
+  # Inspired by: http://ngauthier.com/2012/02/quick-tests-with-bash.html
+  desc "Run tests quickly by merging all types and not resetting db"
+  Rake::TestTask.new(:all) do |t|
+    t.libs << "test"
+    t.pattern = "test/**/*_test.rb"
+  end
+
+  namespace :all do
+    desc "Run tests quickly, but also reset db"
+    task :db => %w[db:test:prepare test:all]
   end
 
   Rake::TestTask.new(recent: "test:prepare") do |t|
@@ -145,16 +157,5 @@ namespace :test do
   Rails::SubTestTask.new(integration: "test:prepare") do |t|
     t.libs << "test"
     t.pattern = 'test/integration/**/*_test.rb'
-  end
-
-  Rails::SubTestTask.new(benchmark: 'test:prepare') do |t|
-    t.libs << 'test'
-    t.pattern = 'test/performance/**/*_test.rb'
-    t.options = '-- --benchmark'
-  end
-
-  Rails::SubTestTask.new(profile: 'test:prepare') do |t|
-    t.libs << 'test'
-    t.pattern = 'test/performance/**/*_test.rb'
   end
 end

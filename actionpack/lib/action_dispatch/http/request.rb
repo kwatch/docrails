@@ -3,6 +3,14 @@ require 'stringio'
 require 'active_support/inflector'
 require 'action_dispatch/http/headers'
 require 'action_controller/metal/exceptions'
+require 'rack/request'
+require 'action_dispatch/http/cache'
+require 'action_dispatch/http/mime_negotiation'
+require 'action_dispatch/http/parameters'
+require 'action_dispatch/http/filter_parameters'
+require 'action_dispatch/http/upload'
+require 'action_dispatch/http/url'
+require 'active_support/core_ext/array/conversions'
 
 module ActionDispatch
   class Request < Rack::Request
@@ -276,15 +284,14 @@ module ActionDispatch
       LOCALHOST =~ remote_addr && LOCALHOST =~ remote_ip
     end
 
-    protected
-
     # Remove nils from the params hash
     def deep_munge(hash)
-      hash.each_value do |v|
+      hash.each do |k, v|
         case v
         when Array
           v.grep(Hash) { |x| deep_munge(x) }
           v.compact!
+          hash[k] = nil if v.empty?
         when Hash
           deep_munge(v)
         end
@@ -292,6 +299,8 @@ module ActionDispatch
 
       hash
     end
+
+    protected
 
     def parse_query(qs)
       deep_munge(super)

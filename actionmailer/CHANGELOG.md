@@ -1,5 +1,30 @@
 ## Rails 4.0.0 (unreleased) ##
 
+
+## Rails 4.0.0.beta1 (February 25, 2013) ##
+
+*   Allow passing interpolations to `#default_i18n_subject`, e.g.:
+
+        # config/locales/en.yml
+        en:
+          user_mailer:
+            welcome:
+              subject: 'Hello, %{username}'
+
+        # app/mailers/user_mailer.rb
+        class UserMailer < ActionMailer::Base
+          def welcome(user)
+            mail(subject: default_i18n_subject(username: user.name))
+          end
+        end
+
+    *Olek Janiszewski*
+
+*   Eager loading made to use relation's `in_clause_length` instead of host's one.
+    Fix #8474
+
+    *Boris Staal*
+
 *   Explicit multipart messages no longer set the order of the MIME parts.
     *Nate Berkopec*
 

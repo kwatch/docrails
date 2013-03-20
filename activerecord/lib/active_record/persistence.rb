@@ -69,11 +69,13 @@ module ActiveRecord
     # Returns true if this object hasn't been saved yet -- that is, a record
     # for the object doesn't exist in the data store yet; otherwise, returns false.
     def new_record?
+      sync_with_transaction_state
       @new_record
     end
 
     # Returns true if this object has been destroyed, otherwise returns false.
     def destroyed?
+      sync_with_transaction_state
       @destroyed
     end
 
@@ -220,7 +222,7 @@ module ActiveRecord
         save
       end
     end
-    
+
     alias update_attributes update
 
     # Updates its receiver just like +update+ but calls <tt>save!</tt> instead
@@ -233,29 +235,29 @@ module ActiveRecord
         save!
       end
     end
-    
+
     alias update_attributes! update!
 
-    # Updates a single attribute of an object, without having to explicitly call save on that object.
-    #
-    # * Validation is skipped.
-    # * Callbacks are skipped.
-    # * updated_at/updated_on column is not updated if that column is available.
-    #
-    # Raises an +ActiveRecordError+ when called on new objects, or when the +name+
-    # attribute is marked as readonly.
+    # Equivalent to <code>update_columns(name => value)</code>.
     def update_column(name, value)
       update_columns(name => value)
     end
 
-    # Updates the attributes from the passed-in hash, without having to explicitly call save on that object.
+    # Updates the attributes directly in the database issuing an UPDATE SQL
+    # statement and sets them in the receiver:
     #
-    # * Validation is skipped.
+    #   user.update_columns(last_request_at: Time.current)
+    #
+    # This is the fastest way to update attributes because it goes straight to
+    # the database, but take into account that in consequence the regular update
+    # procedures are totally bypassed. In particular:
+    #
+    # * Validations are skipped.
     # * Callbacks are skipped.
-    # * updated_at/updated_on column is not updated if that column is available.
+    # * +updated_at+/+updated_on+ are not updated.
     #
-    # Raises an +ActiveRecordError+ when called on new objects, or when at least
-    # one of the attributes is marked as readonly.
+    # This method raises an +ActiveRecord::ActiveRecordError+ when called on new
+    # objects, or when at least one of the attributes is marked as readonly.
     def update_columns(attributes)
       raise ActiveRecordError, "can not update on a new record object" unless persisted?
 
@@ -365,7 +367,16 @@ module ActiveRecord
     #
     #   # triggers @brake.car.touch and @brake.car.corporation.touch
     #   @brake.touch
+    #
+    # Note that +touch+ must be used on a persisted object, or else an
+    # ActiveRecordError will be thrown. For example:
+    #
+    #   ball = Ball.new
+    #   ball.touch(:updated_at)   # => raises ActiveRecordError
+    #
     def touch(name = nil)
+      raise ActiveRecordError, "can not touch on a new record object" unless persisted?
+
       attributes = timestamp_attributes_for_update_in_model
       attributes << name if name
 
@@ -418,13 +429,22 @@ module ActiveRecord
     # Returns the number of affected rows.
     def update_record(attribute_names = @attributes.keys)
       attributes_with_values = arel_attributes_with_values_for_update(attribute_names)
-
       if attributes_with_values.empty?
         0
       else
         klass = self.class
-        stmt = klass.unscoped.where(klass.arel_table[klass.primary_key].eq(id)).arel.compile_update(attributes_with_values)
-        klass.connection.update stmt
+        column_hash = klass.connection.schema_cache.columns_hash klass.table_name
+        db_columns_with_values = attributes_with_values.map { |attr,value|
+          real_column = column_hash[attr.name]
+          [real_column, value]
+        }
+        bind_attrs = attributes_with_values.dup
+        bind_attrs.keys.each_with_index do |column, i|
+          real_column = db_columns_with_values[i].first
+          bind_attrs[column] = klass.connection.substitute_at(real_column, i)
+        end
+        stmt = klass.unscoped.where(klass.arel_table[klass.primary_key].eq(id)).arel.compile_update(bind_attrs)
+        klass.connection.update stmt, 'SQL', db_columns_with_values
       end
     end
 

@@ -726,9 +726,10 @@ module ActionMailer
     # Translates the +subject+ using Rails I18n class under <tt>[mailer_scope, action_name]</tt> scope.
     # If it does not find a translation for the +subject+ under the specified scope it will default to a
     # humanized version of the <tt>action_name</tt>.
-    def default_i18n_subject #:nodoc:
+    # If the subject has interpolations, you can pass them through the +interpolations+ parameter.
+    def default_i18n_subject(interpolations = {})
       mailer_scope = self.class.mailer_name.tr('/', '.')
-      I18n.t(:subject, scope: [mailer_scope, action_name], default: action_name.humanize)
+      I18n.t(:subject, interpolations.merge(scope: [mailer_scope, action_name], default: action_name.humanize))
     end
 
     def collect_responses(headers) #:nodoc:
@@ -747,7 +748,7 @@ module ActionMailer
         templates_path = headers.delete(:template_path) || self.class.mailer_name
         templates_name = headers.delete(:template_name) || action_name
 
-        each_template(templates_path, templates_name) do |template|
+        each_template(Array(templates_path), templates_name) do |template|
           self.formats = template.formats
 
           responses << {
@@ -761,9 +762,9 @@ module ActionMailer
     end
 
     def each_template(paths, name, &block) #:nodoc:
-      templates = lookup_context.find_all(name, Array(paths))
+      templates = lookup_context.find_all(name, paths)
       if templates.empty?
-        raise ActionView::MissingTemplate.new([paths], name, [paths], false, 'mailer')
+        raise ActionView::MissingTemplate.new(paths, name, paths, false, 'mailer')
       else
         templates.uniq { |t| t.formats }.each(&block)
       end

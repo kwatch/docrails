@@ -170,7 +170,7 @@ module ActionView
       # You can also use custom data attributes using the <tt>:data</tt> option:
       #
       #   link_to "Visit Other Site", "http://www.rubyonrails.org/", data: { confirm: "Are you sure?" }
-      #   # => <a href="http://www.rubyonrails.org/" data-confirm="Are you sure?"">Visit Other Site</a>
+      #   # => <a href="http://www.rubyonrails.org/" data-confirm="Are you sure?">Visit Other Site</a>
       def link_to(name = nil, options = nil, html_options = nil, &block)
         html_options, options = options, name if block_given?
         options ||= {}
@@ -241,13 +241,13 @@ module ActionView
       #   #      </div>
       #   #    </form>"
       #
-      #   <%= button_to "New", action: "new", form_class: "new-thing" %>
+      #   <%= button_to "New", { action: "new" }, form_class: "new-thing" %>
       #   # => "<form method="post" action="/controller/new" class="new-thing">
       #   #      <div><input value="New" type="submit" /></div>
       #   #    </form>"
       #
       #
-      #   <%= button_to "Create", action: "create", remote: true, form: { "data-type" => "json" } %>
+      #   <%= button_to "Create", { action: "create" }, remote: true, form: { "data-type" => "json" } %>
       #   # => "<form method="post" action="/images/create" class="button_to" data-remote="true" data-type="json">
       #   #      <div>
       #   #        <input value="Create" type="submit" />
@@ -514,7 +514,7 @@ module ActionView
                 "in a #request method"
         end
 
-        return false unless request.get?
+        return false unless request.get? || request.head?
 
         url_string = url_for(options)
 

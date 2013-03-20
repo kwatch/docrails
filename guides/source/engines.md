@@ -28,7 +28,7 @@ Engines can also be isolated from their host applications. This means that an ap
 
 It's important to keep in mind at all times that the application should **always** take precedence over its engines. An application is the object that has final say in what goes on in the universe (with the universe being the application's environment) where the engine should only be enhancing it, rather than changing it drastically.
 
-To see demonstrations of other engines, check out [Devise](https://github.com/plataformatec/devise), an engine that provides authentication for its parent applications, or [Forem](https://github.com/radar/forem), an engine that provides forum functionality. There's also [Spree](https://github.com/spree/spree) which provides an e-commerce platform, and [RefineryCMS](https://github.com/resolve/refinerycms), a CMS engine.
+To see demonstrations of other engines, check out [Devise](https://github.com/plataformatec/devise), an engine that provides authentication for its parent applications, or [Forem](https://github.com/radar/forem), an engine that provides forum functionality. There's also [Spree](https://github.com/spree/spree) which provides an e-commerce platform, and [RefineryCMS](https://github.com/refinery/refinerycms), a CMS engine.
 
 Finally, engines would not have been possible without the work of James Adam, Piotr Sarnacki, the Rails Core Team, and a number of other people. If you ever meet them, don't forget to say thanks!
 
@@ -57,7 +57,7 @@ The `--full` option tells the generator that you want to create an engine, inclu
     end
     ```
   * A file at `lib/blorgh/engine.rb` which is identical in function to a standard Rails application's `config/application.rb` file:
-  
+
     ```ruby
     module Blorgh
       class Engine < ::Rails::Engine
@@ -72,12 +72,12 @@ The `--mountable` option tells the generator that you want to create a "mountabl
   * A namespaced `ApplicationHelper` stub
   * A layout view template for the engine
   * Namespace isolation to `config/routes.rb`:
-  
+
     ```ruby
     Blorgh::Engine.routes.draw do
     end
     ```
- 
+
   * Namespace isolation to `lib/blorgh/engine.rb`:
 
     ```ruby
@@ -261,7 +261,7 @@ end
 
 This helps prevent conflicts with any other engine or application that may have a post resource as well.
 
-Finally, two files that are the assets for this resource are generated, `app/assets/javascripts/blorgh/posts.js` and `app/assets/javascripts/blorgh/posts.css`. You'll see how to use these a little later.
+Finally, two files that are the assets for this resource are generated, `app/assets/javascripts/blorgh/posts.js` and `app/assets/stylesheets/blorgh/posts.css`. You'll see how to use these a little later.
 
 By default, the scaffold styling is not applied to the engine as the engine's layout file, `app/views/layouts/blorgh/application.html.erb` doesn't load it. To make this apply, insert this line into the `<head>` tag of this layout:
 
@@ -395,7 +395,7 @@ def create
   @post = Post.find(params[:post_id])
   @comment = @post.comments.create(params[:comment])
   flash[:notice] = "Comment has been created!"
-  redirect_to post_path
+  redirect_to posts_path
 end
 ```
 
@@ -470,7 +470,7 @@ If you have multiple engines that need migrations copied over, use `railties:ins
 $ rake railties:install:migrations
 ```
 
-This command, when run for the first time will copy over all the migrations from the engine. When run the next time, it will only copy over migrations that haven't been copied over already. The first run for this command will output something such as this:
+This command, when run for the first time, will copy over all the migrations from the engine. When run the next time, it will only copy over migrations that haven't been copied over already. The first run for this command will output something such as this:
 
 ```bash
 Copied migration [timestamp_1]_create_blorgh_posts.rb from blorgh
@@ -650,6 +650,14 @@ self.author = Blorgh.user_class.find_or_create_by(name: author_name)
 
 Resulting in something a little shorter, and more implicit in its behavior. The `user_class` method should always return a `Class` object.
 
+Since we changed the `user_class` method to no longer return a
+`String` but a `Class` we must also modify our `belongs_to` definition
+in the `Blorgh::Post` model:
+
+```ruby
+belongs_to :author, class_name: Blorgh.user_class.to_s
+```
+
 To set this configuration setting within the application, an initializer should be used. By using an initializer, the configuration will be set up before the application starts and calls the engine's models which may depend on this configuration setting existing.
 
 Create a new initializer at `config/initializers/blorgh.rb` inside the application where the `blorgh` engine is installed and put this content in it:
@@ -754,10 +762,9 @@ end
 
 #### Implementing Decorator Pattern Using ActiveSupport::Concern
 
-Using `Class#class_eval` is great for simple adjustments, but for more complex class modifications, you might want to consider using [`ActiveSupport::Concern`](http://edgeapi.rubyonrails.org/classes/ActiveSupport/Concern.html) helps manage load order of interlinked dependencies at run time allowing you to significantly modularize your code.
+Using `Class#class_eval` is great for simple adjustments, but for more complex class modifications, you might want to consider using [`ActiveSupport::Concern`](http://edgeapi.rubyonrails.org/classes/ActiveSupport/Concern.html). ActiveSupport::Concern manages load order of interlinked dependent modules and classes at run time allowing you to significantly modularize your code.
 
-**Adding** `Post#time_since_created`<br/>
-**Overriding** `Post#summary`
+**Adding** `Post#time_since_created` and **Overriding** `Post#summary`
 
 ```ruby
 # MyApp/app/models/blorgh/post.rb
@@ -790,7 +797,7 @@ module Blorgh::Concerns::Models::Post
   extend ActiveSupport::Concern
 
   # 'included do' causes the included code to be evaluated in the
-  # conext where it is included (post.rb), rather than be 
+  # context where it is included (post.rb), rather than be
   # executed in the module's context (blorgh/concerns/models/post).
   included do
     attr_accessor :author_name
@@ -800,9 +807,9 @@ module Blorgh::Concerns::Models::Post
 
     private
 
-    def set_author
-      self.author = User.find_or_create_by(name: author_name)
-    end
+      def set_author
+        self.author = User.find_or_create_by(name: author_name)
+      end
   end
 
   def summary
@@ -840,7 +847,7 @@ Try this now by creating a new file at `app/views/blorgh/posts/index.html.erb` a
 
 ### Routes
 
-Routes inside an engine are, by default, isolated from the application. This is done by the `isolate_namespace` call inside the `Engine` class. This essentially means that the application and its engines can have identically named routes, and that they will not clash.
+Routes inside an engine are, by default, isolated from the application. This is done by the `isolate_namespace` call inside the `Engine` class. This essentially means that the application and its engines can have identically named routes and they will not clash.
 
 Routes inside an engine are drawn on the `Engine` class within `config/routes.rb`, like this:
 

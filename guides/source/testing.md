@@ -39,10 +39,10 @@ Rails creates a `test` folder for you as soon as you create a Rails project usin
 ```bash
 $ ls -F test
 
-fixtures/  functional/  integration/  performance/  test_helper.rb  unit/
+fixtures/  functional/  integration/  test_helper.rb  unit/
 ```
 
-The `unit` directory is meant to hold tests for your models, the `functional` directory is meant to hold tests for your controllers, the `integration` directory is meant to hold tests that involve any number of controllers interacting, and the `performance` directory is meant for performance tests.
+The `unit` directory is meant to hold tests for your models, the `functional` directory is meant to hold tests for your controllers and the `integration` directory is meant to hold tests that involve any number of controllers interacting.
 
 Fixtures are a way of organizing test data; they reside in the `fixtures` folder.
 
@@ -760,14 +760,12 @@ You don't need to set up and run your tests by hand on a test-by-test basis. Rai
 | Tasks                           | Description |
 | ------------------------------- | ----------- |
 | `rake test`                     | Runs all unit, functional and integration tests. You can also simply run `rake` as the _test_ target is the default.|
-| `rake test:benchmark`           | Benchmark the performance tests|
 | `rake test:controllers`         | Runs all the controller tests from `test/controllers`|
 | `rake test:functionals`         | Runs all the functional tests from `test/controllers`, `test/mailers`, and `test/functional`|
 | `rake test:helpers`             | Runs all the helper tests from `test/helpers`|
 | `rake test:integration`         | Runs all the integration tests from `test/integration`|
 | `rake test:mailers`             | Runs all the mailer tests from `test/mailers`|
 | `rake test:models`              | Runs all the model tests from `test/models`|
-| `rake test:profile`             | Profile the performance tests|
 | `rake test:recent`              | Tests recent changes|
 | `rake test:uncommitted`         | Runs all the tests which are uncommitted. Supports Subversion and Git|
 | `rake test:units`               | Runs all the unit tests from `test/models`, `test/helpers`, and `test/unit`|
@@ -776,10 +774,13 @@ You don't need to set up and run your tests by hand on a test-by-test basis. Rai
 Brief Note About `Test::Unit`
 -----------------------------
 
-Ruby ships with a boat load of libraries. One little gem of a library is `Test::Unit`, a framework for unit testing in Ruby. All the basic assertions discussed above are actually defined in `Test::Unit::Assertions`. The class `ActiveSupport::TestCase` which we have been using in our unit and functional tests extends `Test::Unit::TestCase`, allowing
+Ruby ships with a boat load of libraries. Ruby 1.8 provides `Test::Unit`, a framework for unit testing in Ruby. All the basic assertions discussed above are actually defined in `Test::Unit::Assertions`. The class `ActiveSupport::TestCase` which we have been using in our unit and functional tests extends `Test::Unit::TestCase`, allowing
 us to use all of the basic assertions in our tests.
 
+Ruby 1.9 introduced `MiniTest`, an updated version of `Test::Unit` which provides a backwards compatible API for `Test::Unit`. You could also use `MiniTest` in Ruby 1.8 by installing the `minitest` gem.
+
 NOTE: For more information on `Test::Unit`, refer to [test/unit Documentation](http://ruby-doc.org/stdlib/libdoc/test/unit/rdoc/)
+For more information on `MiniTest`, refer to [Minitest](http://www.ruby-doc.org/stdlib-1.9.3/libdoc/minitest/unit/rdoc/)
 
 Setup and Teardown
 ------------------
@@ -945,7 +946,7 @@ Cheers!
 
 This is the right time to understand a little more about writing tests for your mailers. The line `ActionMailer::Base.delivery_method = :test` in `config/environments/test.rb` sets the delivery method to test mode so that email will not actually be delivered (useful to avoid spamming your users while testing) but instead it will be appended to an array (`ActionMailer::Base.deliveries`).
 
-However often in unit tests, mails will not actually be sent, simply constructed, as in the example above, where the precise content of the email is checked against what it should be.
+This way, emails are not actually sent, simply constructed. The precise content of the email can then be checked against what is expected, as in the example above.
 
 ### Functional Testing
 

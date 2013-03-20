@@ -502,14 +502,14 @@ For Apache:
 
 ```apache
 # The Expires* directives requires the Apache module `mod_expires` to be enabled.
-<LocationMatch "^/assets/.*$">
+<Location /assets/>
   # Use of ETag is discouraged when Last-Modified is present
   Header unset ETag
   FileETag None
   # RFC says only cache for 1 year
   ExpiresActive On
   ExpiresDefault "access plus 1 year"
-</LocationMatch>
+</Location>
 ```
 
 For nginx:
@@ -547,7 +547,35 @@ This directive is available if the core module that provides this feature was co
 
 If you're compiling nginx with Phusion Passenger you'll need to pass that option when prompted.
 
-A robust configuration for Apache is possible but tricky; please Google around. (Or help update this Guide if you have a good example configuration for Apache.)
+Apache is also able to serve the [gzipped](http://en.wikipedia.org/wiki/Gzip) version of your assets; however, it requires a bit more work:
+
+```apache
+<LocationMatch "^/assets/.*$">
+  Header unset ETag
+  FileETag None
+
+  # RFC says only cache for 1 year
+  ExpiresActive On
+  ExpiresDefault "access plus 1 year"
+
+  RewriteEngine	On
+  RewriteCond %{HTTP:Accept-Encoding} gzip
+  RewriteCond %{HTTP_USER_AGENT} !Konqueror
+  RewriteCond %{REQUEST_FILENAME}.gz -f
+  RewriteRule ^(.+).(css|js)$ $1.$2.gz [QSA,L]
+</LocationMatch>
+
+<FilesMatch \.css\.gz>
+  ForceType text/css
+</FilesMatch>
+
+<FilesMatch \.js\.gz>
+  ForceType application/javascript
+</FilesMatch>
+AddEncoding gzip .gz
+```
+
+NOTE: You will need to make sure `mod_headers`, `mod_mime` and `mod_rewrite` are loaded; otherwise, the above configuration will fail.
 
 ### Local Precompilation
 
@@ -720,7 +748,31 @@ A good example of this is the `jquery-rails` gem which comes with Rails as the s
 Making Your Library or Gem a Pre-Processor
 ------------------------------------------
 
-TODO: Registering gems on [Tilt](https://github.com/rtomayko/tilt) enabling Sprockets to find them.
+As Sprockets uses [Tilt](https://github.com/rtomayko/tilt) as a generic
+interface to different templating engines, your gem should just
+implement the Tilt template protocol. Normally, you would subclass
+`Tilt::Template` and reimplement `evaluate` method to return final
+output. Template source is stored at `@code`. Have a look at
+[`Tilt::Template`](https://github.com/rtomayko/tilt/blob/master/lib/tilt/template.rb)
+sources to learn more.
+
+```ruby
+module BangBang
+  class Template < ::Tilt::Template
+    # Adds a "!" to original template.
+    def evaluate(scope, locals, &block)
+      "#{@code}!"
+    end
+  end
+end
+```
+
+Now that you have a `Template` class, it's time to associate it with an
+extension for template files:
+
+```ruby
+Sprockets.register_engine '.bang', BangBang::Template
+```
 
 Upgrading from Old Versions of Rails
 ------------------------------------

@@ -34,7 +34,6 @@ DEFAULT_APP_FILES = %w(
   test/helpers
   test/mailers
   test/integration
-  test/performance
   vendor
   vendor/assets
   tmp/cache
@@ -71,7 +70,7 @@ class AppGeneratorTest < Rails::Generators::TestCase
   end
 
   def test_application_new_exits_with_non_zero_code_on_invalid_application_name
-    quietly { system 'rails new test' }
+    quietly { system 'rails new test --no-rc' }
     assert_equal false, $?.success?
   end
 
@@ -165,6 +164,11 @@ class AppGeneratorTest < Rails::Generators::TestCase
     end
   end
 
+  def test_config_database_app_name_with_period
+    run_generator [File.join(destination_root, "common.usage.com"), "-d", "postgresql"]
+    assert_file "common.usage.com/config/database.yml", /common_usage_com/
+  end
+
   def test_config_postgresql_database
     run_generator([destination_root, "-d", "postgresql"])
     assert_file "config/database.yml", /postgresql/
@@ -218,7 +222,6 @@ class AppGeneratorTest < Rails::Generators::TestCase
     assert_file "test/test_helper.rb" do |helper_content|
       assert_no_match(/fixtures :all/, helper_content)
     end
-    assert_file "test/performance/browsing_test.rb"
   end
 
   def test_generator_if_skip_sprockets_is_given
@@ -241,7 +244,6 @@ class AppGeneratorTest < Rails::Generators::TestCase
       assert_no_match(/config\.assets\.css_compressor = :sass/, content)
       assert_no_match(/config\.assets\.version = '1\.0'/, content)
     end
-    assert_file "test/performance/browsing_test.rb"
   end
 
   def test_inclusion_of_javascript_runtime
@@ -340,15 +342,6 @@ class AppGeneratorTest < Rails::Generators::TestCase
     end
   end
 
-  def test_generated_environments_file_for_auto_explain
-    run_generator [destination_root, "--skip-active-record"]
-    %w(development production).each do |env|
-      assert_file "config/environments/#{env}.rb" do |file|
-        assert_no_match %r(auto_explain_threshold_in_seconds), file
-      end
-    end
-  end
-
   def test_pretend_option
     output = run_generator [File.join(destination_root, "myapp"), "--pretend"]
     assert_no_match(/run  bundle install/, output)
@@ -362,30 +355,5 @@ protected
 
   def assert_gem(gem)
     assert_file "Gemfile", /^gem\s+["']#{gem}["']$/
-  end
-end
-
-class CustomAppGeneratorTest < Rails::Generators::TestCase
-  include GeneratorsTestHelper
-  tests Rails::Generators::AppGenerator
-
-  arguments [destination_root]
-  include SharedCustomGeneratorTests
-
-protected
-  def default_files
-    ::DEFAULT_APP_FILES
-  end
-
-  def builders_dir
-    "app_builders"
-  end
-
-  def builder_class
-    :AppBuilder
-  end
-
-  def action(*args, &block)
-    silence(:stdout) { generator.send(*args, &block) }
   end
 end

@@ -53,6 +53,16 @@ module ActiveRecord
 
       ActiveRecord::Tasks::DatabaseTasks.create @configuration
     end
+
+    def test_create_when_database_exists_outputs_info_to_stderr
+      $stderr.expects(:puts).with("my-app-db already exists").once
+
+      ActiveRecord::Base.connection.stubs(:create_database).raises(
+        ActiveRecord::StatementInvalid.new("Can't create database 'dev'; database exists:")
+      )
+
+      ActiveRecord::Tasks::DatabaseTasks.create @configuration
+    end
   end
 
   class MysqlDBCreateAsRootTest < ActiveRecord::TestCase
@@ -239,9 +249,20 @@ module ActiveRecord
 
     def test_structure_dump
       filename = "awesome-file.sql"
-      Kernel.expects(:system).with("mysqldump", "--result-file", filename, "--no-data", "test-db")
+      Kernel.expects(:system).with("mysqldump", "--result-file", filename, "--no-data", "test-db").returns(true)
 
       ActiveRecord::Tasks::DatabaseTasks.structure_dump(@configuration, filename)
+    end
+
+    def test_warn_when_external_structure_dump_fails
+      filename = "awesome-file.sql"
+      Kernel.expects(:system).with("mysqldump", "--result-file", filename, "--no-data", "test-db").returns(false)
+
+      warnings = capture(:stderr) do
+        ActiveRecord::Tasks::DatabaseTasks.structure_dump(@configuration, filename)
+      end
+
+      assert_match(/Could not dump the database structure/, warnings)
     end
   end
 

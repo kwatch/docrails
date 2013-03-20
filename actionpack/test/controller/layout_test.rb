@@ -1,5 +1,6 @@
 require 'abstract_unit'
 require 'rbconfig'
+require 'active_support/core_ext/array/extract_options'
 
 # The view_paths array must be set on Base and not LayoutTest so that LayoutTest's inherited
 # method has access to the view_paths array when looking for a layout to automatically assign.
@@ -80,7 +81,7 @@ end
 
 class StreamingLayoutController < LayoutTest
   def render(*args)
-    options = args.extract_options! || {}
+    options = args.extract_options!
     super(*args, options.merge(:stream => true))
   end
 end

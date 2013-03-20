@@ -18,9 +18,9 @@ module ActiveRecord
         #   create_database config[:database], config
         #   create_database 'foo_development', encoding: 'unicode'
         def create_database(name, options = {})
-          options = options.reverse_merge(:encoding => "utf8")
+          options = { encoding: 'utf8' }.merge!(options.symbolize_keys)
 
-          option_string = options.symbolize_keys.sum do |key, value|
+          option_string = options.sum do |key, value|
             case key
             when :owner
               " OWNER = \"#{value}\""
@@ -321,14 +321,16 @@ module ActiveRecord
         #
         # Example:
         #   rename_table('octopuses', 'octopi')
-        def rename_table(name, new_name)
+        def rename_table(table_name, new_name)
           clear_cache!
-          execute "ALTER TABLE #{quote_table_name(name)} RENAME TO #{quote_table_name(new_name)}"
+          execute "ALTER TABLE #{quote_table_name(table_name)} RENAME TO #{quote_table_name(new_name)}"
           pk, seq = pk_and_sequence_for(new_name)
-          if seq == "#{name}_#{pk}_seq"
+          if seq == "#{table_name}_#{pk}_seq"
             new_seq = "#{new_name}_#{pk}_seq"
             execute "ALTER TABLE #{quote_table_name(seq)} RENAME TO #{quote_table_name(new_seq)}"
           end
+
+          rename_table_indexes(table_name, new_name)
         end
 
         # Adds a new column to the named table.
@@ -370,6 +372,7 @@ module ActiveRecord
         def rename_column(table_name, column_name, new_column_name)
           clear_cache!
           execute "ALTER TABLE #{quote_table_name(table_name)} RENAME COLUMN #{quote_column_name(column_name)} TO #{quote_column_name(new_column_name)}"
+          rename_column_indexes(table_name, column_name, new_column_name)
         end
 
         def remove_index!(table_name, index_name) #:nodoc:
@@ -416,14 +419,6 @@ module ActiveRecord
             case precision
               when 0..6; "timestamp(#{precision})"
               else raise(ActiveRecordError, "No timestamp type has precision of #{precision}. The allowed range of precision is from 0 to 6")
-            end
-          when 'intrange'
-            return 'int4range' unless limit
-
-            case limit
-              when 1..4; 'int4range'
-              when 5..8; 'int8range'
-              else raise(ActiveRecordError, "No range type has byte size #{limit}. Use a numeric with precision 0 instead.")
             end
           else
             super

@@ -191,7 +191,7 @@ module ActiveRecord
     # * <tt>Project#portfolio, Project#portfolio=(portfolio), Project#portfolio.nil?</tt>
     # * <tt>Project#project_manager, Project#project_manager=(project_manager), Project#project_manager.nil?,</tt>
     # * <tt>Project#milestones.empty?, Project#milestones.size, Project#milestones, Project#milestones<<(milestone),</tt>
-    #   <tt>Project#milestones.delete(milestone), Project#milestones.destroy(mileston), Project#milestones.find(milestone_id),</tt>
+    #   <tt>Project#milestones.delete(milestone), Project#milestones.destroy(milestone), Project#milestones.find(milestone_id),</tt>
     #   <tt>Project#milestones.build, Project#milestones.create</tt>
     # * <tt>Project#categories.empty?, Project#categories.size, Project#categories, Project#categories<<(category1),</tt>
     #   <tt>Project#categories.delete(category1), Project#categories.destroy(category1)</tt>
@@ -965,8 +965,8 @@ module ActiveRecord
     # For +has_and_belongs_to_many+, <tt>delete</tt> and <tt>destroy</tt> are the same: they
     # cause the records in the join table to be removed.
     #
-    # For +has_many+, <tt>destroy</tt> will always call the <tt>destroy</tt> method of the
-    # record(s) being removed so that callbacks are run. However <tt>delete</tt> will either
+    # For +has_many+, <tt>destroy</tt> and <tt>destory_all</tt> will always call the <tt>destroy</tt> method of the
+    # record(s) being removed so that callbacks are run. However <tt>delete</tt> and <tt>delete_all</tt> will either
     # do the deletion according to the strategy specified by the <tt>:dependent</tt> option, or
     # if no <tt>:dependent</tt> option is given, then it will follow the default strategy.
     # The default strategy is <tt>:nullify</tt> (set the foreign keys to <tt>nil</tt>), except for
@@ -1114,11 +1114,11 @@ module ActiveRecord
       #   similar callbacks may affect the :dependent behavior, and the
       #   :dependent behavior may affect other callbacks.
       #
-      #   * <tt>:destroy</tt> causes all the associated objects to also be destroyed
-      #   * <tt>:delete_all</tt> causes all the asssociated objects to be deleted directly from the database (so callbacks will not execute)
+      #   * <tt>:destroy</tt> causes all the associated objects to also be destroyed.
+      #   * <tt>:delete_all</tt> causes all the associated objects to be deleted directly from the database (so callbacks will not be executed).
       #   * <tt>:nullify</tt> causes the foreign keys to be set to +NULL+. Callbacks are not executed.
-      #   * <tt>:restrict_with_exception</tt> causes an exception to be raised if there are any associated records
-      #   * <tt>:restrict_with_error</tt> causes an error to be added to the owner if there are any associated objects
+      #   * <tt>:restrict_with_exception</tt> causes an exception to be raised if there are any associated records.
+      #   * <tt>:restrict_with_error</tt> causes an error to be added to the owner if there are any associated objects.
       #
       #   If using with the <tt>:through</tt> option, the association on the join model must be
       #   a +belongs_to+, and the records which get deleted are the join records, rather than
@@ -1231,7 +1231,7 @@ module ActiveRecord
       #   its owner is destroyed:
       #
       #   * <tt>:destroy</tt> causes the associated object to also be destroyed
-      #   * <tt>:delete</tt> causes the asssociated object to be deleted directly from the database (so callbacks will not execute)
+      #   * <tt>:delete</tt> causes the associated object to be deleted directly from the database (so callbacks will not execute)
       #   * <tt>:nullify</tt> causes the foreign key to be set to +NULL+. Callbacks are not executed.
       #   * <tt>:restrict_with_exception</tt> causes an exception to be raised if there is an associated record
       #   * <tt>:restrict_with_error</tt> causes an error to be added to the owner if there is an associated object

@@ -121,6 +121,10 @@ class TimeExtCalculationsTest < ActiveSupport::TestCase
     assert_equal Time.local(2005,2,4,19,0,0), Time.local(2005,2,4,19,30,10).beginning_of_hour
   end
 
+  def test_beginning_of_minute
+    assert_equal Time.local(2005,2,4,19,30,0), Time.local(2005,2,4,19,30,10).beginning_of_minute
+  end
+
   def test_end_of_day
     assert_equal Time.local(2007,8,12,23,59,59,Rational(999999999, 1000)), Time.local(2007,8,12,10,10,10).end_of_day
     with_env_tz 'US/Eastern' do
@@ -135,6 +139,10 @@ class TimeExtCalculationsTest < ActiveSupport::TestCase
 
   def test_end_of_hour
     assert_equal Time.local(2005,2,4,19,59,59,Rational(999999999, 1000)), Time.local(2005,2,4,19,30,10).end_of_hour
+  end
+
+  def test_end_of_minute
+    assert_equal Time.local(2005,2,4,19,30,59,Rational(999999999, 1000)), Time.local(2005,2,4,19,30,10).end_of_minute
   end
 
   def test_last_year
@@ -526,7 +534,11 @@ class TimeExtCalculationsTest < ActiveSupport::TestCase
   end
 
   def test_to_time
-    assert_equal Time.local(2005, 2, 21, 17, 44, 30), Time.local(2005, 2, 21, 17, 44, 30).to_time
+    with_env_tz 'US/Eastern' do
+      assert_equal Time, Time.local(2005, 2, 21, 17, 44, 30).to_time.class
+      assert_equal Time.local(2005, 2, 21, 17, 44, 30), Time.local(2005, 2, 21, 17, 44, 30).to_time
+      assert_equal Time.local(2005, 2, 21, 17, 44, 30).utc_offset, Time.local(2005, 2, 21, 17, 44, 30).to_time.utc_offset
+    end
   end
 
   # NOTE: this test seems to fail (changeset 1958) only on certain platforms,

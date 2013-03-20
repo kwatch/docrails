@@ -3,11 +3,10 @@ Ruby on Rails 4.0 Release Notes
 
 Highlights in Rails 4.0:
 
-* Ruby 1.9.3 only
+* Ruby 2.0 preferred; 1.9.3+ required
 * Strong Parameters
 * Turbolinks
 * Russian Doll Caching
-* Asynchronous Mailers
 
 These release notes cover only the major changes. To know about various bug fixes and changes, please refer to the change logs or check out the [list of commits](https://github.com/rails/rails/commits/master) in the main Rails repository on GitHub.
 
@@ -68,6 +67,7 @@ In Rails 4.0, several features have been extracted into gems. You can simply add
 * Action Caching ([Github](https://github.com/rails/actionpack-action_caching), [Pull Request](https://github.com/rails/rails/pull/7833))
 * Page Caching ([Github](https://github.com/rails/actionpack-page_caching), [Pull Request](https://github.com/rails/rails/pull/7833))
 * Sprockets ([Github](https://github.com/rails/sprockets-rails))
+* Performance tests ([Github](https://github.com/rails/rails-perftest), [Pull Request](https://github.com/rails/rails/pull/8876))
 
 Documentation
 -------------
@@ -85,7 +85,7 @@ Please refer to the [Changelog](https://github.com/rails/rails/blob/master/railt
 
 *   New test locations `test/models`, `test/helpers`, `test/controllers`, and `test/mailers`. Corresponding rake tasks added as well. ([Pull Request](https://github.com/rails/rails/pull/7878))
 
-* Your app's executables now live in the `bin/` dir. Run `rake update:bin` to get `bin/bundle`, `bin/rails`, and `bin/rake`.
+* Your app's executables now live in the `bin/` dir. Run `rake rails:update:bin` to get `bin/bundle`, `bin/rails`, and `bin/rake`.
 
 * Threadsafe on by default
 
@@ -149,7 +149,7 @@ Please refer to the [Changelog](https://github.com/rails/rails/blob/master/activ
 Action Pack
 -----------
 
-Please refer to the [Changelog](https://github.com/rails/rails/blob/master/railties/CHANGELOG.md) for detailed changes.
+Please refer to the [Changelog](https://github.com/rails/rails/blob/master/actionpack/CHANGELOG.md) for detailed changes.
 
 ### Notable changes
 
@@ -161,7 +161,7 @@ Please refer to the [Changelog](https://github.com/rails/rails/blob/master/railt
 Active Record
 -------------
 
-Please refer to the [Changelog](https://github.com/rails/rails/blob/master/railties/CHANGELOG.md) for detailed changes.
+Please refer to the [Changelog](https://github.com/rails/rails/blob/master/activerecord/CHANGELOG.md) for detailed changes.
 
 ### Notable changes
 
@@ -178,12 +178,6 @@ Please refer to the [Changelog](https://github.com/rails/rails/blob/master/railt
       If migrating down, the given migration / block is run normally.
       See the [Guide on Migration](https://github.com/rails/rails/blob/master/guides/source/migrations.md#reverting-previous-migrations)
 
-*   Adds some metadata columns to `schema_migrations` table.
-
-    * `migrated_at`
-    * `fingerprint` - an md5 hash of the migration.
-    * `name` - the filename minus version and extension.
-
 *   Adds PostgreSQL array type support. Any datatype can be used to create an array column, with full migration and schema dumper support.
 
 *   Add `Relation#load` to explicitly load the record and return `self`.
@@ -199,6 +193,8 @@ Please refer to the [Changelog](https://github.com/rails/rails/blob/master/railt
 *   `mysql` and `mysql2` connections will set `SQL_MODE=STRICT_ALL_TABLES` by default to avoid silent data loss. This can be disabled by specifying `strict: false` in your `database.yml`.
 
 *   Remove IdentityMap.
+
+*   Remove automatic execution of EXPLAIN queries. The option `active_record.auto_explain_threshold_in_seconds` is no longer used and should be removed.
 
 *   Adds `ActiveRecord::NullRelation` and `ActiveRecord::Relation#none` implementing the null object pattern for the Relation class.
 

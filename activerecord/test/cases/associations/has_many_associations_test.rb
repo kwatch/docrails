@@ -19,6 +19,9 @@ require 'models/line_item'
 require 'models/car'
 require 'models/bulb'
 require 'models/engine'
+require 'models/categorization'
+require 'models/minivan'
+require 'models/speedometer'
 
 class HasManyAssociationsTestForCountWithFinderSql < ActiveRecord::TestCase
   class Invoice < ActiveRecord::Base
@@ -108,7 +111,8 @@ end
 class HasManyAssociationsTest < ActiveRecord::TestCase
   fixtures :accounts, :categories, :companies, :developers, :projects,
            :developers_projects, :topics, :authors, :comments,
-           :people, :posts, :readers, :taggings, :cars, :essays
+           :people, :posts, :readers, :taggings, :cars, :essays,
+           :categorizations
 
   def setup
     Client.destroyed_client_ids.clear
@@ -623,6 +627,13 @@ class HasManyAssociationsTest < ActiveRecord::TestCase
     company.clients_of_firm.build("name" => "Another Client")
     company.clients_of_firm.build("name" => "Yet Another Client")
     assert_equal 3, company.clients_of_firm.size
+  end
+
+  def test_collection_not_empty_after_building
+    company = companies(:first_firm)
+    assert_predicate company.contracts, :empty?
+    company.contracts.build
+    assert_not_predicate company.contracts, :empty?
   end
 
   def test_collection_size_twice_for_regressions
@@ -1704,5 +1715,46 @@ class HasManyAssociationsTest < ActiveRecord::TestCase
       assert_equal 0,  post.comments.sum(:id)
       assert_equal 0,  post.comments.count
     end
+  end
+
+  test "collection proxy respects default scope" do
+    author = authors(:mary)
+    assert !author.first_posts.exists?
+  end
+
+  test "association with extend option" do
+    post = posts(:welcome)
+    assert_equal "lifo",  post.comments_with_extend.author
+    assert_equal "hello", post.comments_with_extend.greeting
+  end
+
+  test "association with extend option with multiple extensions" do
+    post = posts(:welcome)
+    assert_equal "lifo",  post.comments_with_extend_2.author
+    assert_equal "hello", post.comments_with_extend_2.greeting
+  end
+
+  test "delete record with complex joins" do
+    david = authors(:david)
+
+    post = david.posts.first
+    post.type = 'PostWithSpecialCategorization'
+    post.save
+
+    categorization = post.categorizations.first
+    categorization.special = true
+    categorization.save
+
+    assert_not_equal [], david.posts_with_special_categorizations
+    david.posts_with_special_categorizations = []
+    assert_equal [], david.posts_with_special_categorizations
+  end
+
+  test "does not duplicate associations when used with natural primary keys" do
+    speedometer = Speedometer.create!(id: '4')
+    speedometer.minivans.create!(minivan_id: 'a-van-red' ,name: 'a van', color: 'red')
+
+    assert_equal 1, speedometer.minivans.to_a.size, "Only one association should be present:\n#{speedometer.minivans.to_a}"
+    assert_equal 1, speedometer.reload.minivans.to_a.size
   end
 end

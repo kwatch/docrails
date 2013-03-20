@@ -417,17 +417,7 @@ module ApplicationTests
 
       require "#{app_path}/config/environment"
 
-      assert_equal Time.find_zone!("Wellington"), Time.zone_default
-    end
-
-    test "timezone can be set on initializers" do
-      app_file "config/initializers/locale.rb", <<-RUBY
-        Rails.application.config.time_zone = "Central Time (US & Canada)"
-      RUBY
-
-      require "#{app_path}/config/environment"
-
-      assert_equal Time.find_zone!("Central Time (US & Canada)"), Time.zone_default
+      assert_equal "Wellington", Rails.application.config.time_zone
     end
 
     test "raises when an invalid timezone is defined in the config" do
@@ -575,6 +565,54 @@ module ApplicationTests
 
       post "/posts", {post: {"title" =>"zomg"}}
       assert_equal 'permitted', last_response.body
+    end
+
+    test "config.action_controller.action_on_unpermitted_parameters = :raise" do
+      app_file 'app/controllers/posts_controller.rb', <<-RUBY
+      class PostsController < ActionController::Base
+        def create
+          render text: params.require(:post).permit(:name)
+        end
+      end
+      RUBY
+
+      add_to_config <<-RUBY
+        routes.prepend do
+          resources :posts
+        end
+        config.action_controller.action_on_unpermitted_parameters = :raise
+      RUBY
+
+      require "#{app_path}/config/environment"
+
+      assert_equal :raise, ActionController::Parameters.action_on_unpermitted_parameters
+
+      post "/posts", {post: {"title" =>"zomg"}}
+      assert_match "We're sorry, but something went wrong", last_response.body
+    end
+
+    test "config.action_controller.action_on_unpermitted_parameters is :log by default on development" do
+      ENV["RAILS_ENV"] = "development"
+
+      require "#{app_path}/config/environment"
+
+      assert_equal :log, ActionController::Parameters.action_on_unpermitted_parameters
+    end
+
+    test "config.action_controller.action_on_unpermitted_parameters is :log by defaul on test" do
+      ENV["RAILS_ENV"] = "test"
+
+      require "#{app_path}/config/environment"
+
+      assert_equal :log, ActionController::Parameters.action_on_unpermitted_parameters
+    end
+
+    test "config.action_controller.action_on_unpermitted_parameters is false by default on production" do
+      ENV["RAILS_ENV"] = "production"
+
+      require "#{app_path}/config/environment"
+
+      assert_equal false, ActionController::Parameters.action_on_unpermitted_parameters
     end
 
     test "config.action_dispatch.ignore_accept_header" do

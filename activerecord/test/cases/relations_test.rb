@@ -321,6 +321,22 @@ class RelationTest < ActiveRecord::TestCase
     assert_equal 1, person_with_reader_and_post.size
   end
 
+  def test_no_arguments_to_query_methods_raise_errors
+    assert_raises(ArgumentError) { Topic.references() }
+    assert_raises(ArgumentError) { Topic.includes() }
+    assert_raises(ArgumentError) { Topic.preload() }
+    assert_raises(ArgumentError) { Topic.group() }
+    assert_raises(ArgumentError) { Topic.reorder() }
+  end
+
+  def test_blank_like_arguments_to_query_methods_dont_raise_errors
+    assert_nothing_raised { Topic.references([]) }
+    assert_nothing_raised { Topic.includes([]) }
+    assert_nothing_raised { Topic.preload([]) }
+    assert_nothing_raised { Topic.group([]) }
+    assert_nothing_raised { Topic.reorder([]) }
+  end
+
   def test_scoped_responds_to_delegated_methods
     relation = Topic.all
 
@@ -401,6 +417,13 @@ class RelationTest < ActiveRecord::TestCase
       posts = Post.preload(:author, :comments).order('posts.id')
       assert posts.first.author
       assert posts.first.comments.first
+    end
+  end
+
+  def test_preload_applies_to_all_chained_preloaded_scopes
+    assert_queries(3) do
+      post = Post.with_comments.with_tags.first
+      assert post
     end
   end
 
@@ -689,6 +712,13 @@ class RelationTest < ActiveRecord::TestCase
 
     dev_with_count = Developer.limit(1).merge(Developer.order('id DESC')).merge(Developer.select('developers.*'))
     assert_equal [developers(:poor_jamis)], dev_with_count.to_a
+  end
+
+  def test_relation_to_sql
+    sql = Post.connection.unprepared_statement do
+      Post.first.comments.to_sql
+    end
+    assert_no_match(/\?/, sql)
   end
 
   def test_relation_merging_with_arel_equalities_keeps_last_equality
@@ -1480,5 +1510,18 @@ class RelationTest < ActiveRecord::TestCase
     ensure
       Array.send(:remove_method, :__omg__)
     end
+  end
+
+  test "merge collapses wheres from the LHS only" do
+    left  = Post.where(title: "omg").where(comments_count: 1)
+    right = Post.where(title: "wtf").where(title: "bbq")
+
+    expected = [left.where_values[1]] + right.where_values
+    merged   = left.merge(right)
+
+    assert_equal expected, merged.where_values
+    assert !merged.to_sql.include?("omg")
+    assert merged.to_sql.include?("wtf")
+    assert merged.to_sql.include?("bbq")
   end
 end

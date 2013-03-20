@@ -188,8 +188,7 @@ module ActiveRecord
     # Please see further details in the
     # {Active Record Query Interface guide}[http://guides.rubyonrails.org/active_record_querying.html#running-explain].
     def explain
-      _, queries = collecting_queries_for_explain { exec_queries }
-      exec_explain(queries)
+      exec_explain(collecting_queries_for_explain { exec_queries })
     end
 
     # Converts relation objects to Array.
@@ -236,8 +235,9 @@ module ActiveRecord
     # Scope all queries to the current scope.
     #
     #   Comment.where(post_id: 1).scoping do
-    #     Comment.first # SELECT * FROM comments WHERE post_id = 1
+    #     Comment.first
     #   end
+    #   # => SELECT "comments".* FROM "comments" WHERE "comments"."post_id" = 1 ORDER BY "comments"."id" ASC LIMIT 1
     #
     # Please check unscoped if you want to remove all previous scopes (including
     # the default_scope) during the execution of a block.
@@ -276,7 +276,7 @@ module ActiveRecord
       stmt.table(table)
       stmt.key = table[primary_key]
 
-      if joins_values.any?
+      if with_default_scope.joins_values.any?
         @klass.connection.join_to_update(stmt, arel)
       else
         stmt.take(arel.limit)
@@ -401,7 +401,7 @@ module ActiveRecord
         stmt = Arel::DeleteManager.new(arel.engine)
         stmt.from(table)
 
-        if joins_values.any?
+        if with_default_scope.joins_values.any?
           @klass.connection.join_to_delete(stmt, arel, table[primary_key])
         else
           stmt.wheres = arel.constraints
@@ -444,17 +444,7 @@ module ActiveRecord
     #
     #   Post.where(published: true).load # => #<ActiveRecord::Relation>
     def load
-      unless loaded?
-        # We monitor here the entire execution rather than individual SELECTs
-        # because from the point of view of the user fetching the records of a
-        # relation is a single unit of work. You want to know if this call takes
-        # too long, not if the individual queries take too long.
-        #
-        # It could be the case that none of the queries involved surpass the
-        # threshold, and at the same time the sum of them all does. The user
-        # should get a query plan logged in that case.
-        logging_query_plan { exec_queries }
-      end
+      exec_queries unless loaded?
 
       self
     end
@@ -474,16 +464,16 @@ module ActiveRecord
 
     # Returns sql statement for the relation.
     #
-    #   Users.where(name: 'Oscar').to_sql
+    #   User.where(name: 'Oscar').to_sql
     #   # => SELECT "users".* FROM "users"  WHERE "users"."name" = 'Oscar'
     def to_sql
       @to_sql ||= klass.connection.to_sql(arel, bind_values.dup)
     end
 
-    # Returns a hash of where conditions
+    # Returns a hash of where conditions.
     #
-    #   Users.where(name: 'Oscar').where_values_hash
-    #   # => {name: "oscar"}
+    #   User.where(name: 'Oscar').where_values_hash
+    #   # => {name: "Oscar"}
     def where_values_hash
       equalities = with_default_scope.where_values.grep(Arel::Nodes::Equality).find_all { |node|
         node.left.relation.name == table_name

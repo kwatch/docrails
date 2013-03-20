@@ -1,6 +1,7 @@
 require 'rack/session/abstract/id'
 require 'active_support/core_ext/object/to_query'
 require 'active_support/core_ext/module/anonymous'
+require 'active_support/core_ext/hash/keys'
 
 module ActionController
   module TemplateAssertions
@@ -15,6 +16,7 @@ module ActionController
       @_partials = Hash.new(0)
       @_templates = Hash.new(0)
       @_layouts = Hash.new(0)
+      @_files = Hash.new(0)
 
       ActiveSupport::Notifications.subscribe("render_template.action_view") do |name, start, finish, id, payload|
         path = payload[:layout]
@@ -37,6 +39,16 @@ module ActionController
         end
 
         @_templates[path] += 1
+      end
+
+      ActiveSupport::Notifications.subscribe("!render_template.action_view") do |name, start, finish, id, payload|
+        path = payload[:identifier]
+        next if payload[:virtual_path] # files don't have virtual path
+        if path
+          @_files[path] += 1
+          @_files[path.split("/").last] += 1
+        end
+
       end
     end
 
@@ -81,8 +93,7 @@ module ActionController
     #   # assert that the "_customer" partial was rendered with a specific object
     #   assert_template partial: '_customer', locals: { customer: @customer }
     def assert_template(options = {}, message = nil)
-      # Force body to be read in case the
-      # template is being streamed
+      # Force body to be read in case the template is being streamed.
       response.body
 
       case options
@@ -106,7 +117,7 @@ module ActionController
           end
         assert matches_template, msg
       when Hash
-        options.assert_valid_keys(:layout, :partial, :locals, :count)
+        options.assert_valid_keys(:layout, :partial, :locals, :count, :file)
 
         if options.key?(:layout)
           expected_layout = options[:layout]
@@ -123,10 +134,18 @@ module ActionController
           end
         end
 
+        if options[:file]
+          assert_includes @_files.keys, options[:file]
+        end
+
         if expected_partial = options[:partial]
           if expected_locals = options[:locals]
             if defined?(@_rendered_views)
-              view = expected_partial.to_s.sub(/^_/,'')
+              view = expected_partial.to_s.sub(/^_/, '').sub(/\/_(?=[^\/]+\z)/, '/')
+
+              partial_was_not_rendered_msg = "expected %s to be rendered but it was not." % view
+              assert_includes @_rendered_views.rendered_views, view, partial_was_not_rendered_msg
+
               msg = 'expecting %s to be rendered with %s but was with %s' % [expected_partial,
                                                                              expected_locals,
                                                                              @_rendered_views.locals_for(view)]
@@ -236,18 +255,39 @@ module ActionController
     end
   end
 
+  # Methods #destroy and #load! are overridden to avoid calling methods on the
+  # @store object, which does not exist for the TestSession class.
   class TestSession < Rack::Session::Abstract::SessionHash #:nodoc:
     DEFAULT_OPTIONS = Rack::Session::Abstract::ID::DEFAULT_OPTIONS
 
     def initialize(session = {})
       super(nil, nil)
-      replace(session.stringify_keys)
+      @id = SecureRandom.hex(16)
+      @data = stringify_keys(session)
       @loaded = true
     end
 
     def exists?
       true
     end
+
+    def keys
+      @data.keys
+    end
+
+    def values
+      @data.values
+    end
+
+    def destroy
+      clear
+    end
+
+    private
+
+      def load!
+        @id
+      end
   end
 
   # Superclass for ActionController functional tests. Functional tests allow you to

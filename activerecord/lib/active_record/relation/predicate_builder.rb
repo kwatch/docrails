@@ -7,12 +7,12 @@ module ActiveRecord
         table = default_table
 
         if value.is_a?(Hash)
-          table       = Arel::Table.new(column, default_table.engine)
-          association = klass.reflect_on_association(column.to_sym)
-
           if value.empty?
-            queries.concat ['1 = 2']
+            queries << '1=0'
           else
+            table       = Arel::Table.new(column, default_table.engine)
+            association = klass.reflect_on_association(column.to_sym)
+
             value.each do |k, v|
               queries.concat expand(association && association.klass, table, k, v)
             end
@@ -58,7 +58,7 @@ module ActiveRecord
           key
         else
           key = key.to_s
-          key.split('.').first.to_sym if key.include?('.')
+          key.split('.').first if key.include?('.')
         end
       end.compact
     end
@@ -66,7 +66,7 @@ module ActiveRecord
     private
       def self.build(attribute, value)
         case value
-        when Array, ActiveRecord::Associations::CollectionProxy
+        when Array
           values = value.to_a.map {|x| x.is_a?(Base) ? x.id : x}
           ranges, values = values.partition {|v| v.is_a?(Range)}
 

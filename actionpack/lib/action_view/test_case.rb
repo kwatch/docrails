@@ -122,7 +122,7 @@ module ActionView
 
       class RenderedViewsCollection
         def initialize
-          @rendered_views ||= {}
+          @rendered_views ||= Hash.new { |hash, key| hash[key] = [] }
         end
 
         def add(view, locals)
@@ -132,6 +132,10 @@ module ActionView
 
         def locals_for(view)
           @rendered_views[view]
+        end
+
+        def rendered_views
+          @rendered_views.keys
         end
 
         def view_rendered?(view, expected_locals)
@@ -215,6 +219,7 @@ module ActionView
         :@_routes,
         :@controller,
         :@_layouts,
+        :@_files,
         :@_rendered_views,
         :@method_name,
         :@output_buffer,

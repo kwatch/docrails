@@ -219,6 +219,8 @@ ActiveRecord::Schema.define do
     t.integer  :salary, :default => 70000
     t.datetime :created_at
     t.datetime :updated_at
+    t.datetime :created_on
+    t.datetime :updated_on
   end
 
   create_table :developers_projects, :force => true, :id => false do |t|
@@ -567,6 +569,7 @@ ActiveRecord::Schema.define do
     t.integer :post_id, :null => false
     t.integer :person_id, :null => false
     t.boolean :skimmer, :default => false
+    t.integer :first_post_id
   end
 
   create_table :references, :force => true do |t|
@@ -684,6 +687,7 @@ ActiveRecord::Schema.define do
   create_table :traffic_lights, :force => true do |t|
     t.string   :location
     t.string   :state
+    t.text     :long_state, :null => false
     t.datetime :created_at
     t.datetime :updated_at
   end

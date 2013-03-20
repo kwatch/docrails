@@ -85,7 +85,6 @@ This fragment is then available to all actions in the `ProductsController` using
 ```ruby
 expire_fragment('all_available_products')
 ```
-
 If you want to avoid expiring the fragment manually, whenever an action updates a product, you can define a helper method:
 
 ```ruby
@@ -105,8 +104,7 @@ This method generates a cache key that depends on all products and can be used i
   All available products:
 <% end %>
 ```
-
-You can also use an `ActiveRecord` model as the cache key:
+You can also use an Active Record model as the cache key:
 
 ```erb
 <% Product.all.each do |p| %>
@@ -116,7 +114,7 @@ You can also use an `ActiveRecord` model as the cache key:
 <% end %>
 ```
 
-Behind the scenes, a method called `cache_key` will be invoked on the model and it returns a string like `products/23-20130109142513`. The cache key includes the model name, the id and finally the `updated_at` timestamp. Thus it will automatically generate a new fragment when the product is updated because the key changes.
+Behind the scenes, a method called `cache_key` will be invoked on the model and it returns a string like `products/23-20130109142513`. The cache key includes the model name, the id and finally the updated_at timestamp. Thus it will automatically generate a new fragment when the product is updated because the key changes.
 
 You can also combine the two schemes which is called "Russian Doll Caching":
 
@@ -140,7 +138,7 @@ Query caching is a Rails feature that caches the result set returned by each que
 For example:
 
 ```ruby
-class ProductsController < ActionController
+class ProductsController < ApplicationController
 
   def index
     # Run a find query
@@ -345,8 +343,3 @@ class ProductsController < ApplicationController
   end
 end
 ```
-
-Further reading
----------------
-
-* [Scaling Rails Screencasts](http://railslab.newrelic.com/scaling-rails)
