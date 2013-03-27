@@ -112,26 +112,26 @@
 .EN	step needed to make this example application has been left out, so you can
 .EN	literally follow along step by step. You can get the complete code
 .EN	[here](https://github.com/lifo/docrails/tree/master/guides/code/getting_started).
-.JA	このガイドを使う一番いい方法はどの場面でもこのガイドに従うことです。例題のアプリケーションの実行に必要なコードや手順は全く省かれていないので、文字通りステップバイステップ実行すればよいです。 下記から完全なコードを取得できます。
+.JA	このガイドを使う一番いい方法はどの場面でもこのガイドに従うことです。
+.JA	例題のアプリケーションの実行に必要なコードや手順は全く省かれていないので、
+.JA	文字通りステップバイステップ実行すればよいです。 下記から完全なコードを取得できます。
 .JA	[ここ](https://github.com/lifo/docrails/tree/master/guides/code/getting_started).
-.JA
-.JA
 
 .EN	By following along with this guide, you'll create a Rails project called
 .EN	`blog`, a
 .EN	(very) simple weblog. Before you can start building the application, you need to
 .EN	make sure that you have Rails itself installed.
-.JA	このガイドだけに従うだけで、Railsのプロジェクトである簡単なウェブログ'ブログ'を作成することが出来ます。
-.JA	 アプリケーションを作り始める前に、Railsがインストールされていることを確認する必要があります。
-.JA	
-.JA	
+.JA	このガイドだけに従うだけで、
+.JA	Railsのプロジェクトである簡単なウェブログ'ブログ'を作成することが出来ます。
+.JA	アプリケーションを作り始める前に、
+.JA	Railsがインストールされていることを確認する必要があります。
 
 .EN	TIP: The examples below use `#` and `$` to denote superuser and regular
 .EN	user terminal prompts respectively in a UNIX-like OS. If you are using
 .EN	Windows, your prompt will look something like `c:\source_code>`
-.JA	TIP: 下記で用いる`#`と`$`はそれぞれUnix系OSでの管理者と一般ユーザを示します。
-.JP	もしWindowsを使っている場合、プロンプトは`c:\source_code>`のように見えるでしょう。
-.JP	
+.JA	TIP: 下記で用いる'#'と'$'はそれぞれUnix系OSでの管理者と一般ユーザを示します。
+.JA	もしWindowsを使っている場合、
+.JA	プロンプトは'c:\source_code>'のように見えるでしょう。
 
 .EN	### Installing Rails
 .JA	### Railsのインストール
@@ -142,7 +142,7 @@
 .EN	current version of Ruby installed:
 .JA	コマンドラインプロンプトを開く。
 .JA	Mac OS X上でターミナルアプリを開き、Windows上ではスタートメニューから"実行"を選び、'cms.exe'と入力する。
-.JA	ドル記号`$`で始まるすべてのコマンドは、コマンドラインで実行必要があります。
+.JA	ドル記号'$'で始まるすべてのコマンドは、コマンドラインで実行必要があります。
 .JA	インストールされているRubyのバージョンを確認して下さい:
 
 .EN	```bash
@@ -167,8 +167,8 @@
 .EN	TIP. A number of tools exist to help you quickly install Ruby and Ruby
 .EN	on Rails on your system. Windows users can use [Rails Installer](http://railsinstaller.org), while Mac OS X users can use
 .EN	[Rails One Click](http://railsoneclick.com).
-.JA	TIP. 既にあるツールの数によってRubyとRuby on Railsをシステムにインストールするのが早く終わります。
-.JA
+.JA	TIP. 既にあるツールの数によってRubyとRuby on Railsを
+.JA	システムにインストールするのが早く終わります。
 .JA	[Rails One Click](http://railsoneclick.com)
 
 .EN	To verify that you have everything installed correctly, you should be able to run the following:
@@ -205,8 +205,8 @@
 
 .EN	TIP: You can see all of the command line options that the Rails
 .EN	application builder accepts by running `rails new -h`.
-.JA	TIP: Railsアプリケーションビルダーが実行した内容は'rails new -h'をコマンドラインオプションで入力することで見ることが出来ます。
-.JA
+.JA	TIP: Railsアプリケーションビルダーが実行した内容は'rails new -h'を
+.JA	コマンドラインオプションで入力することで見ることが出来ます。
 
 .EN	After you create the blog application, switch to its folder to continue work directly in that application:
 .JA	ブログアプリケーションを作成した後で、現在の作業ディレクトリをアプリケーションのものに変えます:
@@ -224,9 +224,8 @@
 .EN	application. Most of the work in this tutorial will happen in the `app/` folder, but here's a basic rundown on the function of each of the files and folders that Rails created by default:
 .JA	'rails new blog'コマンドは作業ディレクトリに'blog'と呼ばれる上位のフォルダを作成する。
 .JA	'blog'ディレクトリはいくつかの自動生成されたファイルとフォルダを持ち、Railsアプリケーションの構造を作り出している。
-.JA	このチュートリアルの大部分の作業は`app/`フォルダに作用しますが、
+.JA	このチュートリアルの大部分の作業は'app/'フォルダに作用しますが、
 .JA	ここではファイルやRailsがデフォルトで作成したフォルダのそれぞれの機能についての基本的な概要は次の通りです:
-
 
 .EN	| File/Folder | Purpose |
 .EN	| ----------- | ------- |
@@ -296,7 +295,6 @@
 
 .EN	The "Welcome Aboard" page is the _smoke test_ for a new Rails application: it makes sure that you have your software configured correctly enough to serve a page. You can also click on the _About your application’s environment_ link to see a summary of your application's environment.
 .JA	"Welcome Aboard"ページは新しいRailsアプリケーションによる_smokeとtest_のテストです : これは、ページを作成するのに各ソフトウェアが十分に正しく設定されていることを確認します。 _Aboutをクリックし、アプリケーションのenvironment_リンクはアプリケーションの環境概要を表示します。
-
 
 .EN	### Say "Hello", Rails
 .JA	### "Hello"、 Rails
@@ -631,9 +629,9 @@
 .EN	Typically in Rails, the action that is used for new form submissions
 .EN	like this is called "create", and so the form should be pointed to that action.
 .JA	フォームはどこか別の場所に行く為に異なるURLを使用する必要がある。
-.JA	これは`form_for`の`:url`オプションを変えるだけで行える。
-.JA	一般的にRailsにおいて新規フォームの送信に使用されるアクションは"create"と呼ばれ、フォームがそのアクションに指摘されなければならない。
-.JA
+.JA	これは'form_for'の':url'オプションを変えるだけで行える。
+.JA	一般的にRailsにおいて新規フォームの送信に使用されるアクションは"create"と呼ばれ、
+.JA	フォームがそのアクションに指摘されなければならない。
 
 .EN	Edit the `form_for` line inside `app/views/posts/new.html.erb` to look like this:
 .JA	`app/views/posts/new.html.erb`の中の`form_for`行に次のように記述する:
@@ -731,10 +729,10 @@
 .EN	a plural name. Rails provides a generator for creating models, which
 .EN	most Rails developers tend to use when creating new models.
 .EN	To create the new model, run this command in your terminal:
-.JA	Railsのモデルは単数形の名前を使用しており、それらに対応するデータベーステーブルは複数形の名前を使用します。 RailsはほとんどのRails開発者が新しいモデルを作成するときに使用するであろうモデルを作成するためにgeneratorを提供しています。
+.JA	Railsのモデルは単数形の名前を使用しており、それらに対応するデータベーステーブルは複数形の名前を使用します。
+.JA	RailsはほとんどのRails開発者が新しいモデルを作成するときに使用するであろうモデルを
+.JA	作成するためにgeneratorを提供しています。
 .JA	新しいモデルを作るにはターミナルで次のコマンドを実行してください:
-.JA
-.JA
 
 .EN	```bash
 .EN	$ rails generate model Post title:string text:text
@@ -974,9 +972,8 @@
 
 .EN	Now, create a new file `app/view/posts/show.html.erb` with the following
 .EN	content:
-.JA	今、次のように新しいファイル`app/view/posts/show.html.erb`が
+.JA	今、次のように新しいファイル'app/view/posts/show.html.erb'が
 .JA	コンテンツとして作成される:
-
 
 .EN	```html+erb
 .EN	<p>
@@ -1376,7 +1373,7 @@
 .EN	with class `field_with_errors`. You can define a css rule to make them
 .EN	standout.
 .JA	TIP: Railsは自動的に`field_with_errors`クラスで
-.EN	エラーを含むフィールドを覆います。
+.JA	エラーを含むフィールドを覆います。
 .JA	そこに素晴らしいcssルールを定義することが出来ます。
 
 .EN	Now you'll get a nice error message when saving a post without title when you
@@ -1812,7 +1809,7 @@
 .EN	To fix this, open `config/routes.rb` and modify the `get "posts/:id"`
 .EN	line like this:
 .JA	これを直すのに`config/routes.rb`と`get "posts/:id"`
-を次のように直します。
+.JA	を次のように直します。
 
 .EN	```ruby
 .EN	get "posts/:id" => "posts#show", as: :post
@@ -1870,8 +1867,8 @@
 .EN	the `destroy` action inside `app/controllers/posts_controller.rb`, which doesn't exist yet, but is
 .EN	provided below:
 .JA	投稿の削除に`delete`メソッドを使うには、
-.EN	このルートを`app/controllers/posts_controller.rb`内の
-.EN	'destroy`アクションに関連付ける。これをするには下記に従ってください:
+.JA	このルートを`app/controllers/posts_controller.rb`内の
+.JA	'destroy`アクションに関連付ける。これをするには下記に従ってください:
 
 .EN	```ruby
 .EN	def destroy
@@ -2674,10 +2671,10 @@
 .EN	comment to a local variable named the same as the partial, in this case
 .EN	`comment` which is then available in the partial for us to show.
 .JA	これは今`app/views/comments/_comment.html.erb`内の一部分を見せました、すると、`@post.comments`コレクションのどのコメントに対しても。 
-`render`メソッドは`@post.comments`コレクションを反復処理し、
-ローカル変数は部分的な同じ名前をつけるために
-それぞれのコメントを割り当てる。
-この場合`comment`はその時私たちに見せる為に部分的な利用が可能である。
+.JA	`render`メソッドは`@post.comments`コレクションを反復処理し、
+.JA	ローカル変数は部分的な同じ名前をつけるために
+.JA	それぞれのコメントを割り当てる。
+.JA	この場合`comment`はその時私たちに見せる為に部分的な利用が可能である。
 
 .EN	### Rendering a Partial Form
 .JA	### 部分的なフォームのレンダリング
@@ -2765,7 +2762,7 @@
 .EN	The `@post` object is available to any partials rendered in the view because we
 .EN	defined it as an instance variable.
 .JA	`@post`オブジェクトはどんなパーシャルでもビュー内でレンダリングが利用可能である、
-.EN	なぜならインスタンス変数を定義したからである。
+.JA	なぜならインスタンス変数を定義したからである。
 
 .EN	Deleting Comments
 .EN	-----------------
