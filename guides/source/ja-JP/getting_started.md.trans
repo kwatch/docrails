@@ -1,0 +1,3074 @@
+.EN	Getting Started with Rails
+.EN	==========================
+.JA	Rails入門
+.JA	==========================
+
+.EN	This guide covers getting up and running with Ruby on Rails.
+.JA	このガイドはRuby on railsの導入と動作させるまでをカバーしている。
+
+.EN	After reading this guide, you will know:
+.JA	これを読むことで次の事が可能になる:
+
+.EN	* How to install Rails, create a new Rails application, and connect your
+.EN	  application to a database.
+.EN	* The general layout of a Rails application.
+.EN	* The basic principles of MVC (Model, View, Controller) and RESTful design.
+.EN	* How to quickly generate the starting pieces of a Rails application.
+.JA	* Railsのインストール方法、Railsの新しいアプリケーションの作り方、
+.JA	* アプリケーション度データベースと連携させる方法。
+.JA	* Railsアプリケーションの一般的な設計。
+.JA	* MVC(モデル、ビュー、コントローラ)の基本的な原則とRESTfulデザイン。
+.JA	* Railsアプリケーションの素をどのように素早く生成するか。
+
+.EN	--------------------------------------------------------------------------------
+.JA	--------------------------------------------------------------------------------
+
+.EN	Guide Assumptions
+.EN	-----------------
+.JA	ガイドの前提
+.JA	-----------------
+
+.EN	This guide is designed for beginners who want to get started with a Rails
+.EN	application from scratch. It does not assume that you have any prior experience
+.EN	with Rails. However, to get the most out of it, you need to have some
+.EN	prerequisites installed:
+.JA	このガイドはRailsアプリケーションをスクラッチ開発したい初心者用に
+.JA	設計されています。Railsの使用経験はないと想定しています。
+.JA	しかし、以下の条件は必ず必要です:
+.JA	Ruby言語 バージョン 1.9.3 かそれ以上:
+
+.EN	* The [Ruby](http://www.ruby-lang.org/en/downloads) language version 1.9.3 or higher
+.EN	* The [RubyGems](http://rubygems.org/) packaging system
+.EN	    * To learn more about RubyGems, please read the [RubyGems User Guide](http://docs.rubygems.org/read/book/1)
+.EN	* A working installation of the [SQLite3 Database](http://www.sqlite.org)
+.JA	* [Ruby](http://www.ruby-lang.org/en/downloads)
+.JA	* RubyGemsパッケージングシステム[RubyGems](http://rubygems.org/)
+.JA	    * RubyGemsについての知識[ユーザーズガイド](http://docs.rubygems.org/read/book/1)
+.JA	* SQLite3環境[SQLite3 Database](http://www.sqlite.org)
+
+.EN	Rails is a web application framework running on the Ruby programming language.
+.EN	If you have no prior experience with Ruby, you will find a very steep learning
+.EN	curve diving straight into Rails. There are some good free resources on the
+.EN	internet for learning Ruby, including:
+.JA	RailsはRuby言語で動作するWebアプリケーションです。
+.JA	もしRubyの経験がない場合、
+.JA	Railsの扱いは難しいです。
+.JA	Rubyを学習する良いサイトがあるので参考にしてください。
+
+.EN	* [Mr. Neighborly's Humble Little Ruby Book](http://www.humblelittlerubybook.com)
+.EN	* [Programming Ruby](http://www.ruby-doc.org/docs/ProgrammingRuby/)
+.EN	* [Why's (Poignant) Guide to Ruby](http://mislav.uniqpath.com/poignant-guide/)
+.JA	* [Mr. Neighborly's Humble Little Ruby Book](http://www.humblelittlerubybook.com)
+.JA	* [Programming Ruby](http://www.ruby-doc.org/docs/ProgrammingRuby/)
+.JA	* [Why's (Poignant) Guide to Ruby](http://mislav.uniqpath.com/poignant-guide/)
+
+.EN	What is Rails?
+.EN	--------------
+.JA	Railsとは?
+.JA	--------------
+
+.EN	Rails is a web application development framework written in the Ruby language.
+.EN	It is designed to make programming web applications easier by making assumptions
+.EN	about what every developer needs to get started. It allows you to write less
+.EN	code while accomplishing more than many other languages and frameworks.
+.EN	Experienced Rails developers also report that it makes web application
+.EN	development more fun.
+.JA	RailsはRuby言語で書かれたWebアプリケーション開発のフレームワークです。
+.JA	Webアプリケーションのプログラミングを行うのに、
+.JA	どの開発者が開発を始めるのに必要だと思われることを容易に設計されている。
+.JA	それは他の開発言語やフレームワークよりもコードを書く量が少ないことになります。
+.JA	Railsを経験した開発者もまたWebアプリケーションの開発がより楽しくなったと
+.JA	報告しています。
+
+.EN	Rails is opinionated software. It makes the assumption that there is the "best"
+.EN	way to do things, and it's designed to encourage that way - and in some cases to
+.EN	discourage alternatives. If you learn "The Rails Way" you'll probably discover a
+.EN	tremendous increase in productivity. If you persist in bringing old habits from
+.EN	other languages to your Rails development, and trying to use patterns you
+.EN	learned elsewhere, you may have a less happy experience.
+.JA	Railsは意固地なソフトウェアです。It makes the assumption that there is the "best"
+.JA	way to do things, and it's designed to encourage that way - and in some cases to
+.JA	discourage alternatives. Railsでの作り方を習得すれば、きっと生産性のとてつもなく増加する発見があるでしょう。
+.JA	もし他の言語でRailsの開発を古い習慣で反抗するなら、
+.JA	学んだことをほかの場所で雛形として使う。
+.JA	あなたは幸福た経験が出来なくなる。
+
+.EN	The Rails philosophy includes two major guiding principles:
+.JA	Railsの指針として2つの重要な原則が存在する:
+
+.EN	* DRY - "Don't Repeat Yourself" - suggests that writing the same code over and over again is a bad thing.
+.EN	* Convention Over Configuration - means that Rails makes assumptions about what you want to do and how you're going to
+.EN	do it, rather than requiring you to specify every little thing through endless configuration files.
+.JA	* DRY - "Don't Repeat Yourself"(繰り返しをしない) - 同じコードを何度も何度も書くのは悪いことであるとする。
+.JA	* Convention Over Configuration(設定より規約) - Railsはあなたが何をどのようにしたいか仮定する、
+.JA	更に、 rather than requiring you to specify every little thing through endless configuration files.
+
+.EN	Creating a New Rails Project
+.EN	----------------------------
+.JA	新しいRailsプロジェクトの作成
+.JA	----------------------------
+
+.EN	The best way to use this guide is to follow each step as it happens, no code or
+.EN	step needed to make this example application has been left out, so you can
+.EN	literally follow along step by step. You can get the complete code
+.EN	[here](https://github.com/lifo/docrails/tree/master/guides/code/getting_started).
+.JA	このガイドを使う一番いい方法はどの場面でもこのガイドに従うことです。例題のアプリケーションの実行に必要なコードや手順は全く省かれていないので、文字通りステップバイステップ実行すればよいです。 下記から完全なコードを取得できます。
+.JA	[ここ](https://github.com/lifo/docrails/tree/master/guides/code/getting_started).
+.JA
+.JA
+
+.EN	By following along with this guide, you'll create a Rails project called
+.EN	`blog`, a
+.EN	(very) simple weblog. Before you can start building the application, you need to
+.EN	make sure that you have Rails itself installed.
+.JA	このガイドだけに従うだけで、Railsのプロジェクトである簡単なウェブログ'ブログ'を作成することが出来ます。
+.JA	 アプリケーションを作り始める前に、Railsがインストールされていることを確認する必要があります。
+.JA	
+.JA	
+
+.EN	TIP: The examples below use `#` and `$` to denote superuser and regular
+.EN	user terminal prompts respectively in a UNIX-like OS. If you are using
+.EN	Windows, your prompt will look something like `c:\source_code>`
+.JA	TIP: 下記で用いる`#`と`$`はそれぞれUnix系OSでの管理者と一般ユーザを示します。
+.JP	もしWindowsを使っている場合、プロンプトは`c:\source_code>`のように見えるでしょう。
+.JP	
+
+.EN	### Installing Rails
+.JA	### Railsのインストール
+
+.EN	Open up a command line prompt. On Mac OS X open Terminal.app, on Windows choose
+.EN	"Run" from your Start menu and type 'cmd.exe'. Any commands prefaced with a
+.EN	dollar sign `$` should be run in the command line. Verify that you have a
+.EN	current version of Ruby installed:
+.JA	コマンドラインプロンプトを開く。
+.JA	Mac OS X上でターミナルアプリを開き、Windows上ではスタートメニューから"実行"を選び、'cms.exe'と入力する。
+.JA	ドル記号`$`で始まるすべてのコマンドは、コマンドラインで実行必要があります。
+.JA	インストールされているRubyのバージョンを確認して下さい:
+
+.EN	```bash
+.EN	$ ruby -v
+.EN	ruby 1.9.3p327
+.EN	```
+.JA	```bash
+.JA	$ ruby -v
+.JA	ruby 1.9.3p327
+.JA	```
+
+.EN	To install Rails, use the `gem install` command provided by RubyGems:
+.JA	RailsをインストールするためにRubyGemsの機能である`gem install`コマンドを実行します:
+
+.EN	```bash
+.EN	$ gem install rails
+.EN	```
+.JA	```bash
+.JA	$ gem install rails
+.JA	```
+
+.EN	TIP. A number of tools exist to help you quickly install Ruby and Ruby
+.EN	on Rails on your system. Windows users can use [Rails Installer](http://railsinstaller.org), while Mac OS X users can use
+.EN	[Rails One Click](http://railsoneclick.com).
+.JA	TIP. 既にあるツールの数によってRubyとRuby on Railsをシステムにインストールするのが早く終わります。
+.JA
+.JA	[Rails One Click](http://railsoneclick.com)
+
+.EN	To verify that you have everything installed correctly, you should be able to run the following:
+.JA	全てのインストールが正しくできたか下記を実行して確認してください:
+
+.EN	```bash
+.EN	$ rails --version
+.EN	```
+.JA	```bash
+.JA	$ rails --version
+.JA	```
+
+.EN	If it says something like "Rails 3.2.9", you are ready to continue.
+.JA	もし"Rails 3.2.9"のように表示されれば、次へ進む準備が整いました。
+
+.EN	### Creating the Blog Application
+.JA	### ブログアプリケーションの作成
+
+.EN	Rails comes with a number of scripts called generators that are designed to make your development life easier by creating everything that's necessary to start working on a particular task. One of these is the new application generator, which will provide you with the foundation of a fresh Rails application so that you don't have to write it yourself.
+.JA	Railsにはgeneratorsと呼ばれる幾つかのスクリプトが組み込まれています。generatorsは特定の作業を開始するために必要な全てのものを作成することで、あなたの開発作業を簡単にするように設計されています。 このスクリプトの一つが新しいアプリケーションの生成であり、新期のRailsアプリケーションの基礎を提供するので、あなた自身でコーディングをする必要はまったくありません。
+
+.EN	To use this generator, open a terminal, navigate to a directory where you have rights to create files, and type:
+.JA	このgeneratorを使うには、ターミナルを開き、ファイルを作成するディレクトリまで移動して次を入力します:
+
+.EN	```bash
+.EN	$ rails new blog
+.EN	```
+.JA	```bash
+.JA	$ rails new blog
+.JA	```
+
+.EN	This will create a Rails application called Blog in a directory called blog and install the gem dependencies that are already mentioned in `Gemfile` using `bundle install`.
+.JA	これはblogと呼ばれるディレクトリにBlogと呼ばれるRailsアプリケーションを作成し、'bundle install'を使用して'Gemfile'に既に記載されているgemの依存関係をインストールします。
+
+.EN	TIP: You can see all of the command line options that the Rails
+.EN	application builder accepts by running `rails new -h`.
+.JA	TIP: Railsアプリケーションビルダーが実行した内容は'rails new -h'をコマンドラインオプションで入力することで見ることが出来ます。
+.JA
+
+.EN	After you create the blog application, switch to its folder to continue work directly in that application:
+.JA	ブログアプリケーションを作成した後で、現在の作業ディレクトリをアプリケーションのものに変えます:
+
+.EN	```bash
+.EN	$ cd blog
+.EN	```
+.JA	```bash
+.JA	$ cd blog
+.JA	```
+
+.EN	The `rails new blog` command we ran above created a folder in your
+.EN	working directory called `blog`. The `blog` directory has a number of
+.EN	auto-generated files and folders that make up the structure of a Rails
+.EN	application. Most of the work in this tutorial will happen in the `app/` folder, but here's a basic rundown on the function of each of the files and folders that Rails created by default:
+.JA	'rails new blog'コマンドは作業ディレクトリに'blog'と呼ばれる上位のフォルダを作成する。
+.JA	'blog'ディレクトリはいくつかの自動生成されたファイルとフォルダを持ち、Railsアプリケーションの構造を作り出している。
+.JA	このチュートリアルの大部分の作業は`app/`フォルダに作用しますが、
+.JA	ここではファイルやRailsがデフォルトで作成したフォルダのそれぞれの機能についての基本的な概要は次の通りです:
+
+
+.EN	| File/Folder | Purpose |
+.EN	| ----------- | ------- |
+.EN	|app/|Contains the controllers, models, views, helpers, mailers and assets for your application. You'll focus on this folder for the remainder of this guide.|
+.EN	|bin/|Contains the rails script that starts your app and can contain other scripts you use to deploy or run your application.|
+.EN	|config/|Configure your application's runtime rules, routes, database, and more.  This is covered in more detail in [Configuring Rails Applications](configuring.html)|
+.EN	|config.ru|Rack configuration for Rack based servers used to start the application.|
+.EN	|db/|Contains your current database schema, as well as the database migrations.|
+.EN	|Gemfile<br />Gemfile.lock|These files allow you to specify what gem dependencies are needed for your Rails application. These files are used by the Bundler gem. For more information about Bundler, see [the Bundler website](http://gembundler.com) |
+.EN	|lib/|Extended modules for your application.|
+.EN	|log/|Application log files.|
+.EN	|public/|The only folder seen to the world as-is. Contains the static files and compiled assets.|
+.EN	|Rakefile|This file locates and loads tasks that can be run from the command line. The task definitions are defined throughout the components of Rails. Rather than changing Rakefile, you should add your own tasks by adding files to the lib/tasks directory of your application.|
+.EN	|README.rdoc|This is a brief instruction manual for your application. You should edit this file to tell others what your application does, how to set it up, and so on.|
+.EN	|test/|Unit tests, fixtures, and other test apparatus. These are covered in [Testing Rails Applications](testing.html)|
+.EN	|tmp/|Temporary files (like cache, pid and session files)|
+.EN	|vendor/|A place for all third-party code. In a typical Rails application, this includes Ruby Gems and the Rails source code (if you optionally install it into your project).|
+.JA	| ファイル/フォルダ |目的|
+.JA	| ----------- | ------- |
+.JA	|app/|アプリケーションに対するコントローラー(controllers), モデル(models), ビュー(views), ヘルパー(helpers), メイラー(mailers) and アセット(assets) あなたはこのガイドの残りの部分については、このフォルダに焦点を当てていきます。|
+.JA	|bin/|アプリを開始するrailsスクリプトとアプリケーションをデプロイや実行するのに使うスクリプトを含む。|
+.JA	|config/|アプリケーションのランタイム規則、ルート、データベースなどを形成する。  より詳細は次を参考にしてください[Configuring Rails Applications](configuring.html)|
+.JA	|config.ru|アプリケーションを開始するのに使うサーバーの置き棚の配置を悩ませる。|
+.JA	|db/|現在のデータベーススキーマを含む、またデータベースの移行。|
+.JA	|Gemfile<br />Gemfile.lock|これらのファイルはgem依存はRailsアプリケーションに必要とされているかを指定することが出来ます。 これらのファイルはBundler gemによって使われます。 Bundlerに関するより詳しい情報はこちら[Bundlerウェブサイト](http://gembundler.com) |
+.JA	|lib/|アプリケーションを拡張するモジュール。|
+.JA	|log/|アプリケーションのログファイル。|
+.JA	|public/|何もせずとも不特定多数が閲覧可能なフォルダ。 静的ファイルとコンパイル資産を含む。|
+.JA	|Rakefile|このファイルはコマンドラインから実行可能なタスクの設定と読み込みを行う。 タスク定義はRailsの部品全てによって定義される。 Rakefileの変更ではなく、アプリケーションのlib/tasksディレクトリにファイルを追加する事によって自作のタスクを加えるはずである。|
+.JA	|README.rdoc|これはアプリケーションの概要マニュアル。 アプリケーションが何をするのか、どのように構成するのか他の人に教える為にこのファイルを編集するべきである。|
+.JA	|test/|単体テスト、付属品、そして他の機能。 これらの詳細は次に記されている[Rilsアプリケーションのテスト](testing.html)|
+.JA	|tmp/|一時ファイル (キャッシュや、pid、セッションファイル)|
+.JA	|vendor/|全ての第3者コード置き場。 典型的なRailsアプリケーションにおいて、Ruby GemsとRailsソースコードを含んでいる(もし。任意で独自のプロジェクトの中にインストールするなら)。|
+
+.EN	Hello, Rails!
+.EN	-------------
+.JA	Hello, Rails!
+.JA	-------------
+
+.EN	To begin with, let's get some text up on screen quickly. To do this, you need to get your Rails application server running.
+.JA	まず手始めに画面にいくつか文字を出力してみる。  ここで、Railsアプリケーションのサーバーを動かしている必要がある。
+
+.EN	### Starting up the Web Server
+.JA	### Webサーバーの起動
+
+.EN	You actually have a functional Rails application already. To see it, you need to start a web server on your development machine. You can do this by running:
+.JA	実際にRailsアプリケーションの機能を既に持っている。 これを見て、開発マシンでwebサーバーが起動する事が必要。 下記で実行ができる:
+
+.EN	```bash
+.EN	$ rails server
+.EN	```
+.JA	```bash
+.JA	$ rails server
+.JA	```
+
+.EN	TIP: Compiling CoffeeScript to JavaScript requires a JavaScript runtime and the absence of a runtime will give you an `execjs` error. Usually Mac OS X and Windows come with a JavaScript runtime installed. Rails adds the `therubyracer` gem to Gemfile in a commented line for new apps and you can uncomment if you need it. `therubyrhino` is the recommended runtime for JRuby users and is added by default to Gemfile in apps generated under JRuby. You can investigate about all the supported runtimes at [ExecJS](https://github.com/sstephenson/execjs#readme).
+.JA	TIP: CoffeeScriptをJavaScriptにコンパイルするとJavaScriptランタイムを必要とし、ランタイムの欠如は'execjs'エラーを出力します。 大抵のMac OS XとWindowsはJavaScriptランタイムがインストールされ関連付けられています。 Railsは新しいアプリケーション作成のために、コメントとしてGemfileに'therubyracer'gemを追加します。もし不要であるならそのコメントを解除することが出来ます。 `therubyrhino`はJRubyユーザーに推奨されるランタイムでJRuby下でのアプリ生成における標準のGemfileによって追加されます。 サポートしている全てのランタイムについては次で詳しく調べることができる[ExecJS](https://github.com/sstephenson/execjs#readme)。
+
+.EN	This will fire up WEBrick, a webserver built into Ruby by default. To see your application in action, open a browser window and navigate to <http://localhost:3000>. You should see the Rails default information page:
+.JA	これはWEBrickを燃え上がらせ、Webサーバーは標準でRubyによって構築する。 ブラウザを開き、次のURLを入力することでアプリケーションの動きを見ることが出来ます<http://localhost:3000>。 Railsの初期情報ページを見てください:
+
+.EN	![Welcome Aboard screenshot](images/rails_welcome.png)
+.JA	![Welcome Aboard screenshot](images/rails_welcome.png)
+
+.EN	TIP: To stop the web server, hit Ctrl+C in the terminal window where it's running. To verify the server has stopped you should see your command prompt cursor again. For most UNIX-like systems including Mac OS X this will be a dollar sign `$`. In development mode, Rails does not generally require you to restart the server; changes you make in files will be automatically picked up by the server.
+.JA	TIP: Webサーバーを停止するにはサーバーが入っているターミナルウィンドウでCtrl+Cを入力してください。 サーバーが止まっているか確認するためにはコマンドプロンプトのカーソルを確認してください。 Mac OS Xを含む大抵のUNIX系システムでドル記号`$`になっているはずです。 開発中において一般的にRailsはサーバーの再起動を必要とせず、ファイルの変更はサーバーに自動的に反映されます。
+
+.EN	The "Welcome Aboard" page is the _smoke test_ for a new Rails application: it makes sure that you have your software configured correctly enough to serve a page. You can also click on the _About your application’s environment_ link to see a summary of your application's environment.
+.JA	"Welcome Aboard"ページは新しいRailsアプリケーションによる_smokeとtest_のテストです : これは、ページを作成するのに各ソフトウェアが十分に正しく設定されていることを確認します。 _Aboutをクリックし、アプリケーションのenvironment_リンクはアプリケーションの環境概要を表示します。
+
+
+.EN	### Say "Hello", Rails
+.JA	### "Hello"、 Rails
+
+.EN	To get Rails saying "Hello", you need to create at minimum a _controller_ and a _view_.
+.JA	Railsに"Hello"と言わせるには、最低限_controller_と_view_を作成する必要がある。
+
+.EN	A controller's purpose is to receive specific requests for the application. _Routing_ decides which controller receives which requests. Often, there is more than one route to each controller, and different routes can be served by different _actions_. Each action's purpose is to collect information to provide it to a view.
+.JA	コントローラーの目的はアプリケーション特有のリクエストを受け取る事です。 _Routing_はリクエストに対するコントローラーの受け取り方を決める。 しばしば、それぞれのコントローラーに複数の経路があり、別の経路は異なる_actions_によって提供することが出来ます。 それぞれアクションの目的は、viewのために必要な情報を集める事です。
+
+.EN	A view's purpose is to display this information in a human readable format. An important distinction to make is that it is the _controller_, not the view, where information is collected. The view should just display that information. By default, view templates are written in a language called ERB (Embedded Ruby) which is converted by the request cycle in Rails before being sent to the user.
+.JA	viewの目的はユーザーが読みやすい形にして情報を表示することです。 重要なこととして、_controller_はviewと違って情報を収集する役割であるという事です。ユーザーに届く前にRailsの要求サイクルで変換されます。
+
+.EN	To create a new controller, you will need to run the "controller" generator and tell it you want a controller called "welcome" with an action called "index", just like this:
+.JA	新しいcontrollerを作成するために、次に示すように、"controller"ジェネレータに"welcome"と呼ばれるコントローラを"index"と呼ばれるactionにしたいという情報を渡して実行する必要がある:
+
+.EN	```bash
+.EN	$ rails generate controller welcome index
+.EN	```
+.JA	```bash
+.JA	$ rails generate controller welcome index
+.JA	```
+
+.EN	Rails will create several files and a route for you.
+.JA	Railsはいくつかのファイルと経路を生成してくれます。
+
+.EN	```bash
+.EN	create  app/controllers/welcome_controller.rb
+.EN	 route  get "welcome/index"
+.EN	invoke  erb
+.EN	create    app/views/welcome
+.EN	create    app/views/welcome/index.html.erb
+.EN	invoke  test_unit
+.EN	create    test/controllers/welcome_controller_test.rb
+.EN	invoke  helper
+.EN	create    app/helpers/welcome_helper.rb
+.EN	invoke    test_unit
+.EN	create      test/helpers/welcome_helper_test.rb
+.EN	invoke  assets
+.EN	invoke    coffee
+.EN	create      app/assets/javascripts/welcome.js.coffee
+.EN	invoke    scss
+.EN	create      app/assets/stylesheets/welcome.css.scss
+.EN	```
+.JA	```bash
+.JA	create  app/controllers/welcome_controller.rb
+.JA	 route  get "welcome/index"
+.JA	invoke  erb
+.JA	create    app/views/welcome
+.JA	create    app/views/welcome/index.html.erb
+.JA	invoke  test_unit
+.JA	create    test/controllers/welcome_controller_test.rb
+.JA	invoke  helper
+.JA	create    app/helpers/welcome_helper.rb
+.JA	invoke    test_unit
+.JA	create      test/helpers/welcome_helper_test.rb
+.JA	invoke  assets
+.JA	invoke    coffee
+.JA	create      app/assets/javascripts/welcome.js.coffee
+.JA	invoke    scss
+.JA	create      app/assets/stylesheets/welcome.css.scss
+.JA	```
+
+.EN	Most important of these are of course the controller, located at `app/controllers/welcome_controller.rb` and the view, located at `app/views/welcome/index.html.erb`.
+.JA	このcontrollerの重要な過程は`app/controllers/welcome_controller.rb`とviewと`app/views/welcome/index.html.erb`である。
+
+.EN	Open the `app/views/welcome/index.html.erb` file in your text editor and edit it to contain a single line of code:
+.JA	`app/views/welcome/index.html.erb`をテキストエディターで開いて、一行コードを加えてください:
+
+.EN	```html
+.EN	<h1>Hello, Rails!</h1>
+.EN	```
+.JA	```html
+.JA	<h1>Hello, Rails!</h1>
+.JA	```
+
+.EN	### Setting the Application Home Page
+.JA	### ホームページの設定
+
+.EN	Now that we have made the controller and view, we need to tell Rails when we want Hello Rails! to show up. In our case, we want it to show up when we navigate to the root URL of our site, <http://localhost:3000>. At the moment, "Welcome Aboard" is occupying that spot.
+.JA	今のでcontrollerとviewは完成した。あとはRailsにHello Railsの表示を要求する 。 この場合、作ったサイトのルートURLに対して支持を出せば表示される、<http://localhost:3000>。 すぐに"Welcome Aboard"が表示される。
+
+.EN	Next, you have to tell Rails where your actual home page is located.
+.JA	次に、ホームページの場所をRailsに知らせなければならない。
+
+.EN	Open the file `config/routes.rb` in your editor.
+.JA	`config/routes.rb`をエディターで開く。
+
+.EN	```ruby
+.EN	Blog::Application.routes.draw do
+.EN	  get "welcome/index"
+.JA	```ruby
+.JA	Blog::Application.routes.draw do
+.JA	  get "welcome/index"
+
+.EN	  # The priority is based upon order of creation:
+.EN	  # first created -> highest priority.
+.EN	  # ...
+.EN	  # You can have the root of your site routed with "root"
+.EN	  # root to: "welcome#index"
+.EN	```
+.JA	  # 優先順位は基本的に上から作られた順である:
+.JA	  # first created -> highest priority.
+.JA	  # ...
+.JA	  # サイトのルートを"root"として持つことができる
+.JA	  # root to: "welcome#index"
+.JA	```
+
+.EN	This is your application's _routing file_ which holds entries in a special DSL (domain-specific language) that tells Rails how to connect incoming requests to controllers and actions. This file contains many sample routes on commented lines, and one of them actually shows you how to connect the root of your site to a specific controller and action. Find the line beginning with `root :to` and uncomment it. It should look something like the following:
+.JA	controllersとactionsに対する接続要求をどのようにRailsに伝えるかを特別なDSL(ドメイン固有言語)のエントリで保持しているアプリケーションの_routing file_です。 このファイルはコメントアウトされた箇所にいくつかのサンプルルートを含んでいる、そして特定のcontrollerとactionに対する接続をどのようにすればよいか、実際に見ることができる。 始めに'root:to'を見つけ、コメントアウトを解除します。 下記のようになっているはずです:
+
+.EN	```ruby
+.EN	root to: "welcome#index"
+.EN	```
+.JA	```ruby
+.JA	root to: "welcome#index"
+.JA	```
+
+.EN	The `root to: "welcome#index"` tells Rails to map requests to the root of the application to the welcome controller's index action and `get "welcome/index"` tells Rails to map requests to <http://localhost:3000/welcome/index> to the welcome controller's index action. This was created earlier when you ran the controller generator (`rails generate controller welcome index`).
+.JA	`root to: "welcome#index"`はRailsに対してアプリケーションのルートにwelcome controllerのindex actionを対応付け、controllerの index actionを'get "welcome/index"'によってリクエストの<http://localhost:3000/welcome/index>に対応付ける事を伝えます。 これはcontrollerジェネレーターを実行(`rails generate controller welcome index`)したときに作成されました。
+
+.EN	If you navigate to <http://localhost:3000> in your browser, you'll see the `Hello, Rails!` message you put into `app/views/welcome/index.html.erb`, indicating that this new route is indeed going to `WelcomeController`'s `index` action and is rendering the view correctly.
+.JA	もしブラウザで<http://localhost:3000>にアクセスしたとき、`Hello, Rails!`は`app/views/welcome/index.html.erb`に入れたメッセージを示し、この新しいルートは`WelcomeController`の'index'actionに行くものでviewが正しくレンダリングされている事を示します。
+
+.EN	TIP: For more information about routing, refer to [Rails Routing from the Outside In](routing.html).
+.JA	TIP: ルートに関するより詳細な情報は次を参照してください[Rails Routing from the Outside In](routing.html).
+
+.EN	Getting Up and Running
+.EN	----------------------
+.JA	起動と動作
+.JA	----------------------
+
+.EN	Now that you've seen how to create a controller, an action and a view, let's create something with a bit more substance.
+.JA	今まででcontrollerとactionとviewの作り方を見てきましたので、より本質な部分で何か作成してみましょう。
+
+.EN	In the Blog application, you will now create a new _resource_. A resource is the term used for a collection of similar objects, such as posts, people or animals. You can create, read, update and destroy items for a resource and these operations are referred to as _CRUD_ operations.
+.JA	ブログアプリケーションで新しく_resource_を作成してください。 リソースはこのようなpostを人や動物と同様の物の収集のために使われる表現である。 作成、読み込み、更新、削除をリソースに対して行いこれらの操作は_CRUD_操作として参照される。
+
+.EN	In the next section, you will add the ability to create new posts in your application and be able to view them. This is the "C" and the "R" from CRUD: creation and reading. The form for doing this will look like this:
+.JA	次の章で、アプリケーションに新規投稿とそれを見るの機能を加えます。 これはCRUDでいうところの"C"(create)と"R"(read)に当たります。 これを行うためのフォームは次のようになります:
+
+.EN	![The new post form](images/getting_started/new_post.png)
+.JA	![The new post form](images/getting_started/new_post.png)
+
+.EN	It will look a little basic for now, but that's ok. We'll look at improving the styling for it afterwards.
+.JA	今のところ少しの基本であるが、それでも大丈夫。 後々改善していくやり方であることがわかると思います。
+
+.EN	### Laying down the ground work
+.JA	### 基礎固め
+
+.EN	The first thing that you are going to need to create a new post within the application is a place to do that. A great place for that would be at `/posts/new`. If you attempt to navigate to that now — by visiting <http://localhost:3000/posts/new> — Rails will give you a routing error:
+.JA	始めにアプリケーション内で新しい投稿の作成をする場所が必要です。 それにふさわしいのは`/posts/new`になります。 もしブラウザで<http://localhost:3000/posts/new>に訪れた場合、Railsはルーティングエラーを返すでしょう。
+
+.EN	![A routing error, no route matches /posts/new](images/getting_started/routing_error_no_route_matches.png)
+.JA	![A routing error, no route matches /posts/new](images/getting_started/routing_error_no_route_matches.png)
+
+.EN	This is because there is nowhere inside the routes for the application — defined inside `config/routes.rb` — that defines this route. By default, Rails has no routes configured at all, besides the root route you defined earlier, and so you must define your routes as you need them.
+.JA	なぜなら`config/routes.rb`にアプリケーションのルートが記されていないからです。 標準的にRailsは全てのルート形成を持たず、以前に定義したルート経路に加えて必要とする経路の定義をしなければならない。
+
+.EN	 To do this, you're going to need to create a route inside `config/routes.rb` file, on a new line between the `do` and the `end` for the `draw` method:
+.JA	 これについて`config/routes.rb`ファイルに経路を作成する必要がある、新期行を'draw'メソッドの'do'と'end'に記す必要がある:
+
+.EN	```ruby
+.EN	get "posts/new"
+.EN	```
+.JA	```ruby
+.JA	get "posts/new"
+.JA	```
+
+.EN	This route is a super-simple route: it defines a new route that only responds to `GET` requests, and that the route is at `posts/new`. But how does it know where to go without the use of the `:to` option? Well, Rails uses a sensible default here: Rails will assume that you want this route to go to the new action inside the posts controller.
+.JA	この経路はとても単純で:新しい経路'GET'リクエストに対するレスポンスを経路`posts/new`にするというただ一つの定義を行う。 しかし':to'オプションを使わずにどこへどうやって紐付けるか知っていますか？ Railsはここで気の利いたデフォルト値を使用します:Railsはこのルートが投稿コントローラー内部の新しいアクションに行きたいと仮定します。
+
+.EN	With the route defined, requests can now be made to `/posts/new` in the application. Navigate to <http://localhost:3000/posts/new> and you'll see another routing error:
+.JA	ルートを定義すると、リクエストはアプリケーション中の`/posts/new`になります。 <http://localhost:3000/posts/new>を訪れると別のルーティングエラーが表示されます:
+
+.EN	![Another routing error, uninitialized constant PostsController](images/getting_started/routing_error_no_controller.png)
+.JA	![Another routing error, uninitialized constant PostsController](images/getting_started/routing_error_no_controller.png)
+
+.EN	This error is happening because this route need a controller to be defined. The route is attempting to find that controller so it can serve the request, but with the controller undefined, it just can't do that. The solution to this particular problem is simple: you need to create a controller called `PostsController`. You can do this by running this command:
+.JA	このエラーはルートは定義されたコントローラーが必要なため起こります。 ルートは要求を処理できるように、コントローラーを見つけようとしているが、コントローラは未定義なので、解決することが出来ません。 この特定の問題に対する解決策は簡単です:`PostsController`と呼ばれるコントローラを作成する必要があります。 このコマンドを事項することによって行うことが出来ます:
+
+.EN	```bash
+.EN	$ rails g controller posts
+.EN	```
+.JA	```bash
+.JA	$ rails g controller posts
+.JA	```
+
+.EN	If you open up the newly generated `app/controllers/posts_controller.rb` you'll see a fairly empty controller:
+.JA	新しく作成された`app/controllers/posts_controller.rb`を開く場合は沢山の空のコントローラーが表示されます。
+
+.EN	```ruby
+.EN	class PostsController < ApplicationController
+.EN	end
+.EN	```
+.JA	```ruby
+.JA	class PostsController < ApplicationController
+.JA	end
+.JA	```
+
+.EN	A controller is simply a class that is defined to inherit from `ApplicationController`. It's inside this class that you'll define methods that will become the actions for this controller. These actions will perform CRUD operations on the posts within our system.
+.JA	コントローラーは単に`ApplicationController`から継承するように定義されたクラスです。 それはこのコントローラーのアクションになるメソッドを定義するということはこのクラスの中にある。 これらのアクションは、システム内の投稿でCRUD操作を実行します。
+
+.EN	If you refresh <http://localhost:3000/posts/new> now, you'll get a new error:
+.JA	もし<http://localhost:3000/posts/new>を再度表示すれば、また新しいエラーが発生します。
+
+.EN	![Unknown action new for PostsController!](images/getting_started/unknown_action_new_for_posts.png)
+.JA	![Unknown action new for PostsController!](images/getting_started/unknown_action_new_for_posts.png)
+
+.EN	This error indicates that Rails cannot find the `new` action inside the `PostsController` that you just generated. This is because when controllers are generated in Rails they are empty by default, unless you tell it you wanted actions during the generation process.
+.JA	このエラーは、Railsが先ほど生成した`PostsController`の内部に'new'アクションを見つけることが出来ないことを表しています。 これはRailsによって生成されたコントローラーは生成過程の間にアクションがほしいということを伝えない限り初期状態では空であるからです。
+
+.EN	To manually define an action inside a controller, all you need to do is to define a new method inside the controller. Open `app/controllers/posts_controller.rb` and inside the `PostsController` class, define a `new` method like this:
+.JA	手動でコントローラー内部のアクションを定義するには、コントローラー内部に新しいメソッドを定義することがすべてです。 `app/controllers/posts_controller.rb`を開き`PostsController`クラス内の、`new`メソッドを以下のように定義します:
+
+.EN	```ruby
+.EN	def new
+.EN	end
+.EN	```
+.JA	```ruby
+.JA	def new
+.JA	end
+.JA	```
+
+.EN	With the `new` method defined in `PostsController`, if you refresh <http://localhost:3000/posts/new> you'll see another error:
+.JA	`new`メソッドを定義した`PostsController`で、<http://localhost:3000/posts/new>を更新すると別のエラーが表示されます:
+
+.EN	![Template is missing for posts/new](images/getting_started/template_is_missing_posts_new.png)
+.JA	![Template is missing for posts/new](images/getting_started/template_is_missing_posts_new.png)
+
+.EN	You're getting this error now because Rails expects plain actions like this one to have views associated with them to display their information. With no view available, Rails errors out.
+.JA	Railsはアクションがこれらの情報を表示するには明確に関連づくビューを持っている事を期待しているのでこのエラーを取得している。 使用可能なビューが存在しないRailsエラーが発生している。
+
+.EN	In the above image, the bottom line has been truncated. Let's see what the full thing looks like:
+.JA	上の画像では、一番下の行が省略されているます。 完全なものはどのようになっているか見てみましょう:
+
+.EN	<blockquote>
+.EN	Missing template posts/new, application/new with {locale:[:en], formats:[:html], handlers:[:erb, :builder, :coffee]}. Searched in: * "/path/to/blog/app/views"
+.EN	</blockquote>
+.JA	<blockquote>
+.JA	Missing template posts/new, application/new with {locale:[:en], formats:[:html], handlers:[:erb, :builder, :coffee]}. Searched in: * "/path/to/blog/app/views"
+.JA	</blockquote>
+
+.EN	That's quite a lot of text! Let's quickly go through and understand what each part of it does.
+.JA	非常に多くのテキストです。 各部分が何をしているのかざっと理解してみましょう。
+
+.EN	The first part identifies what template is missing. In this case, it's the `posts/new` template. Rails will first look for this template. If not found, then it will attempt to load a template called `application/new`. It looks for one here because the `PostsController` inherits from `ApplicationController`.
+.JA	テンプレートの欠落を最初の部分で見分けています。 この場合`posts/new`テンプレートです。 Railsはまず、このテンプレートを探します。 見つからない場合、`application/new`というテンプレートを読み込もうとします。 `PostsController`は`ApplicationController`を継承しているので、ここでそれを探します。
+
+.EN	The next part of the message contains a hash. The `:locale` key in this hash simply indicates what spoken language template should be retrieved. By default, this is the English — or "en" — template. The next key, `:formats` specifies the format of template to be served in response. The default format is `:html`, and so Rails is looking for an HTML template. The final key, `:handlers`, is telling us what _template handlers_ could be used to render our template. `:erb` is most commonly used for HTML templates, `:builder` is used for XML templates, and `:coffee` uses CoffeeScript to build JavaScript templates.
+.JA	メッセージの次の部分ではハッシュを含んでいます。 このハッシュで':locale'キーは単純に話される言語のテンプレートを取得する必要があるかを示しています。 標準でこれは英語または"en"テンプレートです。 次のキー`:formats`はレスポンスで提供される明確なテンプレートの形式を指定します。 標準の形式は`:html`であるのでRailsはHTMLテンプレートを探しています。 最後の鍵`:handlers`は_template handlers_はテンプレートをレンダリングするのに使用できるのかを教えてくれています。 `:erb`は最も一般的にHTMLテンプレートに使用され、`:builder`はXMLテンプレートに使用され、`:coffee`はJavaScriptテンプレートを構築する貯めにCoffeeScriptを使用しています。
+
+.EN	The final part of this message tells us where Rails has looked for the templates. Templates within a basic Rails application like this are kept in a single location, but in more complex applications it could be many different paths.
+.JA	Railsはテンプレートを探している場合はメッセージの最後の部分で教えてくれる。 このように基本的なRailsアプリケーション内のテンプレートは一つの場所に集まります。しかし複雑なアプリケーションでは違った場所に配置されること可能性もあります。
+
+.EN	The simplest template that would work in this case would be one located at `app/views/posts/new.html.erb`. The extension of this file name is key: the first extension is the _format_ of the template, and the second extension is the _handler_ that will be used. Rails is attempting to find a template called `posts/new` within `app/views` for the application. The format for this template can only be `html` and the handler must be one of `erb`, `builder` or `coffee`. Because you want to create a new HTML form, you will be using the `ERB` language. Therefore the file should be called `posts/new.html.erb` and needs to be located inside the `app/views` directory of the application.
+.JA	この場合に作用するこの単純なテンプレートは`app/views/posts/new.html.erb`だけである。 このファイル名の拡張子は重要で最初の拡張しはテンプレートの_format_で、二つ目の拡張子は_handler_で使われる。 Railsはアプリケーションの中で`app/views`内の`posts/new`と呼ばれるテンプレートを見つけに行きます。 このテンプレートのフォーマットは`html`だけとすることができ、ハンドらは`erb`であり。`builder`か`coffee`のいずれかでないといけません。 新しいHTMLフォームを作成したいのであれば、'ERB'言語を使用することになります。 なので、ファイルは`posts/new.html.erb`と呼ばれ,アプリケーションの`app/views`ディレクトリに配置されている必要がある。
+
+.EN	Go ahead now and create a new file at `app/views/posts/new.html.erb` and write this content in it:
+.JA	次に、新期ファイル`app/views/posts/new.html.erb`を作成し次の内容を書きます:
+
+.EN	```html
+.EN	<h1>New Post</h1>
+.EN	```
+.JA	```html
+.JA	<h1>New Post</h1>
+.JA	```
+
+.EN	When you refresh <http://localhost:3000/posts/new> you'll now see that the page has a title. The route, controller, action and view are now working harmoniously! It's time to create the form for a new post.
+.JA	<http://localhost:3000/posts/new>を再読み込みするとページのタイトルに記述した内容を見ることが出来ます。 ルート、コントローラー、アクション、ビューが調和していることがわかります。 新しい投稿のためのフォームを作成します。
+
+.EN	### The first form
+.JA	### 最初の形式
+
+.EN	To create a form within this template, you will use a <em>form
+.EN	builder</em>. The primary form builder for Rails is provided by a helper
+.EN	method called `form_for`. To use this method, add this code into `app/views/posts/new.html.erb`:
+.JA	このテンプレートの中にフォームを作成するには<em>フォームビルダー</em>を使用します。
+.JA	Railsの主要なフォームビルダーは'form_for'と呼ばれるヘルパーのメソッドによって提供されている。
+.JA	このメソッドを用いて、次のコードを`app/views/posts/new.html.erb`に加える:
+
+.EN	```html+erb
+.EN	<%= form_for :post do |f| %>
+.EN	  <p>
+.EN	    <%= f.label :title %><br>
+.EN	    <%= f.text_field :title %>
+.EN	  </p>
+.JA	```html+erb
+.JA	<%= form_for :post do |f| %>
+.JA	  <p>
+.JA	    <%= f.label :title %><br>
+.JA	    <%= f.text_field :title %>
+.JA	  </p>
+
+.EN	  <p>
+.EN	    <%= f.label :text %><br>
+.EN	    <%= f.text_area :text %>
+.EN	  </p>
+.JA	  <p>
+.JA	    <%= f.label :text %><br>
+.JA	    <%= f.text_area :text %>
+.JA	  </p>
+
+.EN	  <p>
+.EN	    <%= f.submit %>
+.EN	  </p>
+.EN	<% end %>
+.EN	```
+.JA	  <p>
+.JA	    <%= f.submit %>
+.JA	  </p>
+.JA	<% end %>
+.JA	```
+
+.EN	If you refresh the page now, you'll see the exact same form as in the example. Building forms in Rails is really just that easy!
+.JA	ページを更新すると、例と同じフォームが表示される。 Railsでのフォーム作成は本当にそれだけです!
+
+.EN	When you call `form_for`, you pass it an identifying object for this
+.EN	form. In this case, it's the symbol `:post`. This tells the `form_for`
+.EN	helper what this form is for. Inside the block for this method, the
+.EN	`FormBuilder` object — represented by `f` — is used to build two labels and two text fields, one each for the title and text of a post. Finally, a call to `submit` on the `f` object will create a submit button for the form.
+.JA	`form_for`を呼ぶときには、このフォームに関する固有のパスを渡します。 この場合、`:post`シンボルになります。
+.JA	これは、このフォームが何であるかを'form_for'ヘルパーに伝えます。
+.JA	このメソッドのブロック中では、`FormBuilder`オブジェクトは'f'と表現され2つのラベルと2つのフィールドを作成と、
+.JA	投稿のタイトルと本文のために用いられる 最後に、'f'オブジェクトの`submit`を呼ぶのは、フォームで作成した投稿ボタンです。
+
+.EN	There's one problem with this form though. If you inspect the HTML that is generated, by viewing the source of the page, you will see that the `action` attribute for the form is pointing at `/posts/new`. This is a problem because this route goes to the very page that you're on right at the moment, and that route should only be used to display the form for a new post.
+.JA	しかしこのフォームには一つ問題があります。 もし、生成されたHTMLを詳しく調べる場合、ページのソースを表示することで、フォームの'action'属性は'posts/new'に向いていることがわかります。 これは問題である、なぜなら、このルートは単純なページに行き、現時点での正しい、そしてそのルートは新規投稿に使われるフォームを表示することにだけ使われるべきである。
+
+.EN	The form needs to use a different URL in order to go somewhere else.
+.EN	This can be done quite simply with the `:url` option of `form_for`.
+.EN	Typically in Rails, the action that is used for new form submissions
+.EN	like this is called "create", and so the form should be pointed to that action.
+.JA	フォームはどこか別の場所に行く為に異なるURLを使用する必要がある。
+.JA	これは`form_for`の`:url`オプションを変えるだけで行える。
+.JA	一般的にRailsにおいて新規フォームの送信に使用されるアクションは"create"と呼ばれ、フォームがそのアクションに指摘されなければならない。
+.JA
+
+.EN	Edit the `form_for` line inside `app/views/posts/new.html.erb` to look like this:
+.JA	`app/views/posts/new.html.erb`の中の`form_for`行に次のように記述する:
+
+.EN	```html+erb
+.EN	<%= form_for :post, url: { action: :create } do |f| %>
+.EN	```
+.JA	```html+erb
+.JA	<%= form_for :post, url: { action: :create } do |f| %>
+.JA	```
+
+.EN	In this example, a `Hash` object is passed to the `:url` option. What Rails will do with this is that it will point the form to the `create` action of the current controller, the `PostsController`, and will send a `POST` request to that route. For this to work, you will need to add a route to `config/routes.rb`, right underneath the one for "posts/new":
+.JA	例として`Hash`オブジェクトは`:url`オプションに渡される。 Railsはこれで何をするかというと、現在のコントローラー`PostsController`の'create'アクションにフォームの向き先を指定し、、そのルートに`POST`リクエストを送信します。 これが機能するためには、`config/routes.rb`にルートを記述する必要があります。下記に"posts/new"のものを示します:
+
+.EN	```ruby
+.EN	post "posts" => "posts#create"
+.EN	```
+.JA	```ruby
+.JA	post "posts" => "posts#create"
+.JA	```
+
+.EN	By using the `post` method rather than the `get` method, Rails will define a route that will only respond to POST methods. The POST method is the typical method used by forms all over the web.
+.JA	'get'メソッドではなく'post'メソッドを使うことで、RailsはPOSTメソッドに対する唯一のレスポンスをルートに定義します。 POSTメソッドは全てのWebフォームで一般的な方法として使われています。
+
+.EN	With the form and its associated route defined, you will be able to fill in the form and then click the submit button to begin the process of creating a new post, so go ahead and do that. When you submit the form, you should see a familiar error:
+.JA	フォームとそれに関連するルート定義を使用すると、フォームに記入してから、新規投稿作成の開始プロセスに対して送信ボタンをクリックする時、続けてそれを行います。 フォームを送信するときは、おなじみのエラーが表示されるはずです。
+
+.EN	![Unknown action create for PostsController](images/getting_started/unknown_action_create_for_posts.png)
+.JA	![Unknown action create for PostsController](images/getting_started/unknown_action_create_for_posts.png)
+
+.EN	You now need to create the `create` action within the `PostsController` for this to work.
+.JA	この動作ををさせるためには`PostsController`内に`create`アクションを作成する必要がある。
+
+.EN	### Creating posts
+.JA	### 投稿の作成
+
+.EN	To make the "Unknown action" go away, you can define a `create` action within the `PostsController` class in `app/controllers/posts_controller.rb`, underneath the `new` action:
+.JA	"不明なアクション"をなくすには`app/controllers/posts_controller.rb`の`PostsController`クラス内で、`new`アクションの下部に`create`を定義することができる:
+
+.EN	```ruby
+.EN	class PostsController < ApplicationController
+.EN	  def new
+.EN	  end
+.JA	```ruby
+.JA	class PostsController < ApplicationController
+.JA	  def new
+.JA	  end
+
+.EN	  def create
+.EN	  end
+.EN	end
+.EN	```
+.JA	  def create
+.JA	  end
+.JA	end
+.JA	```
+
+.EN	If you re-submit the form now, you'll see another familiar error: a template is missing. That's ok, we can ignore that for now. What the `create` action should be doing is saving our new post to a database.
+.JA	もしフォームを再送信するなら、別のおなじみのエラーが表示されます:テンプレートが見つかりません。 問題ありません。このエラーを無視することが出来ます。 `create`アクションは必ずデータベースへ新しい投稿を記録しているだろう。
+
+.EN	When a form is submitted, the fields of the form are sent to Rails as _parameters_. These parameters can then be referenced inside the controller actions, typically to perform a particular task. To see what these parameters look like, change the `create` action to this:
+.JA	フォームが送信されると、フォームのフィールドは_parameters_としてRailsに送信されます。 これらのパラメーターは通常、特定のタスクを実行するには、コントローラーのアクション内で参照することが出来ます。 これらのパラメータがどのように見えるかは、'create'アクションを変更する事で可能です。
+
+.EN	```ruby
+.EN	def create
+.EN	  render text: params[:post].inspect
+.EN	end
+.EN	```
+.JA	```ruby
+.JA	def create
+.JA	  render text: params[:post].inspect
+.JA	end
+.JA	```
+
+.EN	The `render` method here is taking a very simple hash with a key of `text` and value of `params[:post].inspect`. The `params` method is the object which represents the parameters (or fields) coming in from the form. The `params` method returns an `ActiveSupport::HashWithIndifferentAccess` object, which allows you to access the keys of the hash using either strings or symbols. In this situation, the only parameters that matter are the ones from the form.
+.JA	ここで`render`メソッドは'text'と'params[:post].inspect'を使って、単純なハッシュキーを作っている。 `params`メソッドはフォームから送られてくるパラメータ(またはフィールド)を表すオブジェクトです。 `params`メソッドは文字列か記号のいずれかを使用して、ハッシュのキーにアクセスすることが可能で、`ActiveSupport::HashWithIndifferentAccess`オブジェクトを返します。 この状況で、先ほどの問題の唯一のパラメータはフォームから送られてきたものです。
+
+.EN	If you re-submit the form one more time you'll now no longer get the missing template error. Instead, you'll see something that looks like the following:
+.JA	もしあなたがもう一度再送信すれば、テンプレートエラーは出ません。 代わりに下記のようなものを見ることができるでしょう:
+
+.EN	```ruby
+.EN	{"title"=>"First post!", "text"=>"This is my first post."}
+.EN	```
+.JA	```ruby
+.JA	{"title"=>"First post!", "text"=>"This is my first post."}
+.JA	```
+
+.EN	This action is now displaying the parameters for the post that are coming in from the form. However, this isn't really all that helpful. Yes, you can see the parameters but nothing in particular is being done with them.
+.JA	このアクションはフォームから送られてきた投稿のためのパラメータを表示しています。 しかし、これは全く役に立ちません。 パラメータを見ることは可能ですが、それについて何かできるということではありません。
+
+.EN	### Creating the Post model
+.JA	### Postモデルの作成
+
+.EN	Models in Rails use a singular name, and their corresponding database tables use
+.EN	a plural name. Rails provides a generator for creating models, which
+.EN	most Rails developers tend to use when creating new models.
+.EN	To create the new model, run this command in your terminal:
+.JA	Railsのモデルは単数形の名前を使用しており、それらに対応するデータベーステーブルは複数形の名前を使用します。 RailsはほとんどのRails開発者が新しいモデルを作成するときに使用するであろうモデルを作成するためにgeneratorを提供しています。
+.JA	新しいモデルを作るにはターミナルで次のコマンドを実行してください:
+.JA
+.JA
+
+.EN	```bash
+.EN	$ rails generate model Post title:string text:text
+.EN	```
+.JA	```bash
+.JA	$ rails generate model Post title:string text:text
+.JA	```
+
+.EN	With that command we told Rails that we want a `Post` model, together
+.EN	with a _title_ attribute of type string, and a _text_ attribute
+.EN	of type text. Those attributes are automatically added to the `posts`
+.EN	table in the database and mapped to the `Post` model.
+.JA	そのコマンドで、Railsに'Post'モデルと、一緒に文字列型の属性を持つ_title_属性と、
+.JA	text型の_text_属性をがほしいと伝えた。
+.JA	 これらの属性は自動的にデータベースの'posts'テーブルとして加えられ、
+.JA	'Post'モデルと対応付けられる。
+
+.EN	Rails responded by creating a bunch of files. For
+.EN	now, we're only interested in `app/models/post.rb` and
+.EN	`db/migrate/20120419084633_create_posts.rb` (your name could be a bit
+.EN	different). The latter is responsible
+.EN	for creating the database structure, which is what we'll look at next.
+.JA	Railsはファイルの束を作成することで対応しました。
+.JA	今のところ、唯一の`app/models/post.rb`と
+.JA	`db/migrate/20120419084633_create_posts.rb`(この名前は少し異なるかもしれない)にだけ興味がある。
+.JA	後者はデータベース構造を構築する責任がある、次を見てみよう。
+
+.EN	TIP: Active Record is smart enough to automatically map column names to
+.EN	model attributes, which means you don't have to declare attributes
+.EN	inside Rails models, as that will be done automatically by Active
+.EN	Record.
+.JA	TIP:Active Recordはモデル属性のカラム名を自動的に対応付ける事に関して十分に賢い。
+.JA	これはActive Recordによって自動的に行われるので、
+.JA	あなたがRailsモデル内の属性について
+.JA	宣言する必要がないことを意味します。
+
+.EN	### Running a Migration
+.JA	### Migrationの実行
+
+.EN	As we've just seen, `rails generate model` created a _database
+.EN	migration_ file inside the `db/migrate` directory.
+.EN	Migrations are Ruby classes that are designed to make it simple to
+.EN	create and modify database tables. Rails uses rake commands to run migrations,
+.EN	and it's possible to undo a migration after it's been applied to your database.
+.EN	Migration filenames include a timestamp to ensure that they're processed in the
+.EN	order that they were created.
+.JA	先ほど見てきたように、'rails generate model'は'db/migrate'ディレクトリー内の
+.JA	_databasemigration_ファイルを生成する。
+.JA	MigrationsはRubyのクラスで簡単にデータベーステーブルの生成と
+.JA	修正が行えるように設計されている。
+.JA	Railsユーザーはmigrationを行うためにrakeコマンドを実行します、
+.JA	また、データベースに適用した後でも元に戻すことが可能です。
+.JA	Migrationファイル名は作成された順序で処理していることを保証するために、タイムスタンプが含まれています。
+
+.EN	If you look in the `db/migrate/20120419084633_create_posts.rb` file (remember,
+.EN	yours will have a slightly different name), here's what you'll find:
+.JA	もし`db/migrate/20120419084633_create_posts.rb`ファイル(若干異なる名前である)を見ると、
+.JA	次の記述が見つかるでしょう:
+
+.EN	```ruby
+.EN	class CreatePosts < ActiveRecord::Migration
+.EN	  def change
+.EN	    create_table :posts do |t|
+.EN	      t.string :title
+.EN	      t.text :text
+.JA	```ruby
+.JA	class CreatePosts < ActiveRecord::Migration
+.JA	  def change
+.JA	    create_table :posts do |t|
+.JA	      t.string :title
+.JA	      t.text :text
+
+.EN	      t.timestamps
+.EN	    end
+.EN	  end
+.EN	end
+.EN	```
+.JA	      t.timestamps
+.JA	    end
+.JA	  end
+.JA	end
+.JA	```
+
+.EN	The above migration creates a method named `change` which will be called when you
+.EN	run this migration. The action defined in this method is also reversible, which
+.EN	means Rails knows how to reverse the change made by this migration, in case you
+.EN	want to reverse it later. When you run this migration it will create a
+.EN	`posts` table with one string column and a text column. It also creates two
+.EN	timestamp fields to allow Rails to track post creation and update times.
+.JA	上記のmigration作成メソッドは`change`と命名され、migrationを実行したときに呼び出されます。
+.JA	この方法で定義されたアクションもまた可逆的であり、
+.JA	後で元に戻したい場合にはRailsはこのmigrationによって行われた変更を
+.JA	元に戻す方法がわかっていることを意味します。
+.JA	このmigrationを実行すると、一つの文字列属性とテキスト属性を持つ'posts'テーブルを生成します。
+.JA	また、Railsは投稿の作成と更新時間を追跡可能にするために2つのタイムスタンプフィールドを生成します。
+
+.EN	TIP: For more information about migrations, refer to [Rails Database
+.EN	Migrations](migrations.html).
+.JA	TIP: migrationに関する詳細は次を参考にしてください[Rails Database
+.JA	Migrations](migrations.html).
+
+.EN	At this point, you can use a rake command to run the migration:
+.JA	この時点では,migrationを実行するためにrakeコマンドを使用することが出来ます:
+
+.EN	```bash
+.EN	$ rake db:migrate
+.EN	```
+.JA	```bash
+.JA	$ rake db:migrate
+.JA	```
+
+.EN	Rails will execute this migration command and tell you it created the Posts
+.EN	table.
+.JA	Railsはこのmigrationコマンドを実行し、
+.JA	Postsテーブルを作成した事を教えてくれます。
+
+.EN	```bash
+.EN	==  CreatePosts: migrating ====================================================
+.EN	-- create_table(:posts)
+.EN	   -> 0.0019s
+.EN	==  CreatePosts: migrated (0.0020s) ===========================================
+.EN	```
+.JA	```bash
+.JA	==  CreatePosts: migrating ====================================================
+.JA	-- create_table(:posts)
+.JA	   -> 0.0019s
+.JA	==  CreatePosts: migrated (0.0020s) ===========================================
+.JA	```
+
+.EN	NOTE. Because you're working in the development environment by default, this
+.EN	command will apply to the database defined in the `development` section of your
+.EN	`config/database.yml` file. If you would like to execute migrations in another
+.EN	environment, for instance in production, you must explicitly pass it when
+.EN	invoking the command: `rake db:migrate RAILS_ENV=production`.
+.JA	NOTE. デフォルトでは開発環境で作業しているので、
+.JA	このコマンドは'config/database.yml'ファイルの
+.JA	'development'セクションで定義されたデータベースに適用されます。
+.JA	もし別の環境、例えば本番環境にmigrationを実行したい場合はコマンドを呼び出すときに、
+.JA	本番環境であることを明示的に指定する必要があります:'rake db:migrate RAILS_ENV=production'
+
+.EN	### Saving data in the controller
+.JA	### コントローラーへのデータの保存
+
+.EN	Back in `posts_controller`, we need to change the `create` action
+.EN	to use the new `Post` model to save the data in the database. Open `app/controllers/posts_controller.rb`
+.EN	and change the `create` action to look like this:
+.JA	'posts_controller'の話しに戻ります。データベースにデータを保存する新しい'Post'モデルを使うには
+.JA	'create'アクションを変更する必要がある。
+.JA	`app/controllers/posts_controller.rb`を開き、'create'アクションを以下のように変更します。
+
+.EN	```ruby
+.EN	def create
+.EN	  @post = Post.new(params[:post])
+.JA	```ruby
+.JA	def create
+.JA	  @post = Post.new(params[:post])
+
+.EN	  @post.save
+.EN	  redirect_to action: :show, id: @post.id
+.EN	end
+.EN	```
+.JA	  @post.save
+.JA	  redirect_to action: :show, id: @post.id
+.JA	end
+.JA	```
+
+.EN	Here's what's going on: every Rails model can be initialized with its
+.EN	respective attributes, which are automatically mapped to the respective
+.EN	database columns. In the first line we do just that (remember that
+.EN	`params[:post]` contains the attributes we're interested in). Then,
+.EN	`@post.save` is responsible for saving the model in the database.
+.EN	Finally, we redirect the user to the `show` action,
+.EN	which we'll define later.
+.JA	ここで何が起こっているか:
+.JA	全てのRailsモデルは属性を受け取った時に初期化され、
+.JA	それぞれのデータベースカラムは自動的に対応付けられます。 
+.JA	最初の行で('params[:post]'は私たちの興味がある属性を含んでいる)。
+.JA	次に'@post.save'はデータベースのモデルを
+.JA	保存する責任があります。
+.JA	最後に'show'アクションにユーザーをリダイレクトすることを定義します。
+
+.EN	TIP: As we'll see later, `@post.save` returns a boolean indicating
+.EN	whether the model was saved or not.
+.JA	TIP: 後でわかるように'@post.save'はモデルが保存されたかどうかを示す
+.JA	ブール値を返します。
+.JA	### 投稿の表示
+
+.EN	### Showing Posts
+
+.EN	If you submit the form again now, Rails will complain about not finding
+.EN	the `show` action. That's not very useful though, so let's add the
+.EN	`show` action before proceeding. Open `config/routes.rb` and add the following route:
+.JA	もしフォームを送信し直すなら、Railsは"show"アクションが見つけられないと訴えてくるだろう。
+.JA	それでは全く役に立たないので、次に進む前に'show'アクションを加えましょう。
+.JA	'config/routes.rb'を開いて、次のルートを加えてください:
+
+.EN	```ruby
+.EN	get "posts/:id" => "posts#show"
+.EN	```
+.JA	```ruby
+.JA	get "posts/:id" => "posts#show"
+.JA	```
+
+.EN	The special syntax `:id` tells rails that this route expects an `:id`
+.EN	parameter, which in our case will be the id of the post. Note that this
+.EN	time we had to specify the actual mapping, `posts#show` because
+.EN	otherwise Rails would not know which action to render.
+.JA	特別な文法規則の':id'はrailsにこのルートは':id'パラメータを除くことを伝え
+.JA	投稿のidを使うことを指示します。
+.JA	参考として今回特別に'posts#show'に対する関連付けをしなければならなかった、
+.JA	なぜならRailsは別の方法でアクションに対応するレンダーを知るすべがないからである。
+
+.EN	As we did before, we need to add the `show` action in
+.EN	`app/controllers/posts_controller.rb` and its respective view.
+.JA	我々は依然と同じように'app/controllers/posts_controller.rb'に対して
+.JA	'show'アクションとそれぞれのビューを追加する必要がある。
+
+.EN	```ruby
+.EN	def show
+.EN	  @post = Post.find(params[:id])
+.EN	end
+.EN	```
+.JA	```ruby
+.JA	def show
+.JA	  @post = Post.find(params[:id])
+.JA	end
+.JA	```
+
+.EN	A couple of things to note. We use `Post.find` to find the post we're
+.EN	interested in. We also use an instance variable (prefixed by `@`) to
+.EN	hold a reference to the post object. We do this because Rails will pass all instance
+.EN	variables to the view.
+.JA	それぞれ注意する点。
+.JA	'Post.find'を使って興味のある投稿を探すとき
+.JA	投稿オブジェクトの参照を保持するのにインスタンス変数(接頭語に'@'がつく)もまた使用する。
+.JA	Railsはビューにインスタンス変数全てを渡すのでこれを利用するのです。
+
+.EN	Now, create a new file `app/view/posts/show.html.erb` with the following
+.EN	content:
+.JA	今、次のように新しいファイル`app/view/posts/show.html.erb`が
+.JA	コンテンツとして作成される:
+
+
+.EN	```html+erb
+.EN	<p>
+.EN	  <strong>Title:</strong>
+.EN	  <%= @post.title %>
+.EN	</p>
+.JA	```html+erb
+.JA	<p>
+.JA	  <strong>Title:</strong>
+.JA	  <%= @post.title %>
+.JA	</p>
+
+.EN	<p>
+.EN	  <strong>Text:</strong>
+.EN	  <%= @post.text %>
+.EN	</p>
+.EN	```
+.JA	<p>
+.JA	  <strong>Text:</strong>
+.JA	  <%= @post.text %>
+.JA	</p>
+.JA	```
+
+.EN	Finally, if you now go to
+.EN	<http://localhost:3000/posts/new> you'll
+.EN	be able to create a post. Try it!
+.JA	最後に<http://localhost:3000/posts/new>へ
+.JA	アクセスして、投稿が作成可能なことが確認できる。
+.JA	 やってみよう！
+
+.EN	![Show action for posts](images/getting_started/show_action_for_posts.png)
+.JA	![Show action for posts](images/getting_started/show_action_for_posts.png)
+
+.EN	### Listing all posts
+.JA	### 全ての投稿を見る
+
+.EN	We still need a way to list all our posts, so let's do that. As usual,
+.EN	we'll need a route placed into `config/routes.rb`:
+.JA	投稿されたものを見る手段はまだないので、次はそれを作りましょう。
+.JA	いつものように'config/routes.rb'の中にルートの記述が必要です:
+
+.EN	```ruby
+.EN	get "posts" => "posts#index"
+.EN	```
+.JA	```ruby
+.JA	get "posts" => "posts#index"
+.JA	```
+
+.EN	And an action for that route inside the `PostsController` in the `app/controllers/posts_controller.rb` file:
+.JA	そして`app/controllers/posts_controller.rb`ファイルの`PostsController`の中にルートのアクションも必要です:
+
+.EN	```ruby
+.EN	def index
+.EN	  @posts = Post.all
+.EN	end
+.EN	```
+.JA	```ruby
+.JA	def index
+.JA	  @posts = Post.all
+.JA	end
+.JA	```
+
+.EN	And then finally a view for this action, located at `app/views/posts/index.html.erb`:
+.JA	最後に、このアクションのビューを`app/views/posts/index.html.erb`に記述します:
+
+.EN	```html+erb
+.EN	<h1>Listing posts</h1>
+.JA	```html+erb
+.JA	<h1>Listing posts</h1>
+
+.EN	<table>
+.EN	  <tr>
+.EN	    <th>Title</th>
+.EN	    <th>Text</th>
+.EN	  </tr>
+.JA	<table>
+.JA	  <tr>
+.JA	    <th>Title</th>
+.JA	    <th>Text</th>
+.JA	  </tr>
+
+.EN	  <% @posts.each do |post| %>
+.EN	    <tr>
+.EN	      <td><%= post.title %></td>
+.EN	      <td><%= post.text %></td>
+.EN	    </tr>
+.EN	  <% end %>
+.EN	</table>
+.EN	```
+.JA	  <% @posts.each do |post| %>
+.JA	    <tr>
+.JA	      <td><%= post.title %></td>
+.JA	      <td><%= post.text %></td>
+.JA	    </tr>
+.JA	  <% end %>
+.JA	</table>
+.JA	```
+
+.EN	Now if you go to `http://localhost:3000/posts` you will see a list of all the posts that you have created.
+.JA	`http://localhost:3000/posts`へアクセスすると、作成した投稿のリストが表示されることが確認できます。
+
+.EN	### Adding links
+.JA	### リンクの追加
+
+.EN	You can now create, show, and list posts. Now let's add some links to
+.EN	navigate through pages.
+.JA	これまでで投稿、閲覧、リストの投稿が出来ます。
+.JA	次にページ操作のためにいくつかのリンクを追加しましょう。
+
+.EN	Open `app/views/welcome/index.html.erb` and modify it as follows:
+.JA	`app/views/welcome/index.html.erb`を開き、下のように修正します:
+
+.EN	```html+erb
+.EN	<h1>Hello, Rails!</h1>
+.EN	<%= link_to "My Blog", controller: "posts" %>
+.EN	```
+.JA	```html+erb
+.JA	<h1>Hello, Rails!</h1>
+.JA	<%= link_to "My Blog", controller: "posts" %>
+.JA	```
+
+.EN	The `link_to` method is one of Rails' built-in view helpers. It creates a
+.EN	hyperlink based on text to display and where to go - in this case, to the path
+.EN	for posts.
+.JA	`link_to`メソッドはRailsのbuilt-inビューヘルパーの一機能です。
+.JA	テキストをベースに表示と投稿のリンク先を含む
+.JA	ハイパーリンクを作成する。
+
+.EN	Let's add links to the other views as well, starting with adding this "New Post" link to `app/views/posts/index.html.erb`, placing it above the `<table>` tag:
+.JA	他のビューに対するリンクを追加しましょう。初めに"新規投稿"リンクを`app/views/posts/index.html.erb`の`<table>`タグの場所に追加しましょう:
+
+.EN	```erb
+.EN	<%= link_to 'New post', action: :new %>
+.EN	```
+.JA	```erb
+.JA	<%= link_to 'New post', action: :new %>
+.JA	```
+
+.EN	This link will allow you to bring up the form that lets you create a new post. You should also add a link to this template — `app/views/posts/new.html.erb` — to go back to the `index` action. Do this by adding this underneath the form in this template:
+.JA	このリンクは、新しい投稿を作成するフォームを起動します。 `index`アクションに戻っても、`app/views/posts/new.html.erb`を追加する必要があります。 このテンプレート内の下に次の分を加えることで実現します:
+
+.EN	```erb
+.EN	<%= form_for :post do |f| %>
+.EN	  ...
+.EN	<% end %>
+.JA	<%= form_for :post do |f| %>
+.JA	  ...
+.JA	<% end %>
+.JA	```erb
+
+.EN	<%= link_to 'Back', action: :index %>
+.EN	```
+.JA	<%= link_to 'Back', action: :index %>
+.JA	```
+
+.EN	Finally, add another link to the `app/views/posts/show.html.erb` template to go back to the `index` action as well, so that people who are viewing a single post can go back and view the whole list again:
+.JA	最後に、単一の投稿を見ている人が戻ってきたときに、リスト全体を見れるように、同様に'index'アクションに戻って'app/views/posts/show.html.erb'テンプレートに別のリンクを追加する:
+
+.EN	```html+erb
+.EN	<p>
+.EN	  <strong>Title:</strong>
+.EN	  <%= @post.title %>
+.EN	</p>
+.JA	```html+erb
+.JA	<p>
+.JA	  <strong>Title:</strong>
+.JA	  <%= @post.title %>
+.JA	</p>
+
+.EN	<p>
+.EN	  <strong>Text:</strong>
+.EN	  <%= @post.text %>
+.EN	</p>
+.JA	<p>
+.JA	  <strong>Text:</strong>
+.JA	  <%= @post.text %>
+.JA	</p>
+
+.EN	<%= link_to 'Back', action: :index %>
+.EN	```
+.JA	<%= link_to 'Back', action: :index %>
+.JA	```
+
+.EN	TIP: If you want to link to an action in the same controller, you don't
+.EN	need to specify the `:controller` option, as Rails will use the current
+.EN	controller by default.
+.JA	TIP: 同じコントローラー内でアクションのリンクをしたい場合でも、
+.JA	Railsはデフォルトで現在のコントローラーを使うので、
+.JA	明確に':controller'アクションとしなくて良い。
+
+.EN	TIP: In development mode (which is what you're working in by default), Rails
+.EN	reloads your application with every browser request, so there's no need to stop
+.EN	and restart the web server when a change is made.
+.JA	TIP:開発モード(デフォルトで作業をしている時)でブラウザのリクエストによる
+.JA	アプリケーションのRails再読み込みするときでも、
+.JA	変更を反映するためにWebサーバーを再起動する必要はありません。
+
+.EN	### Allowing the update of fields
+.JA	### フィールドの更新許可
+
+.EN	The model file, `app/models/post.rb` is about as simple as it can get:
+.JA	参考になるファイルとして`app/models/post.rb`を見るのが簡単です。
+
+.EN	```ruby
+.EN	class Post < ActiveRecord::Base
+.EN	end
+.EN	```
+.JA	```ruby
+.JA	class Post < ActiveRecord::Base
+.JA	end
+.JA	```
+
+.EN	There isn't much to this file - but note that the `Post` class inherits from
+.EN	`ActiveRecord::Base`. Active Record supplies a great deal of functionality to
+.EN	your Rails models for free, including basic database CRUD (Create, Read, Update,
+.EN	Destroy) operations, data validation, as well as sophisticated search support
+.EN	and the ability to relate multiple models to one another.
+.JA	このファイルはそれほど大きくないですが、`Post`クラスは`ActiveRecord::Base`から継承する事は覚えておいてください。
+.JA	Active Recordは、Railsモデルが自由になるように、
+.JA	データベースの基礎であるCRUD(作成、読み込み、更新、削除)操作、データの検証、洗練された検索、
+.JA	複数のモデルを他のものと関連付ける技術など、
+.JA	いろいろな機能を提供している。
+
+.EN	### Adding Some Validation
+.JA	### 検証の追加
+
+.EN	Rails includes methods to help you validate the data that you send to models.
+.EN	Open the `app/models/post.rb` file and edit it:
+.JA	Railsはモデルに送るデータを検証するのを助ける機能を持っています。
+.JA	`app/models/post.rb`ファイルを開き、下記のように編集します。
+
+.EN	```ruby
+.EN	class Post < ActiveRecord::Base
+.EN	  validates :title, presence: true,
+.EN	                    length: { minimum: 5 }
+.EN	end
+.EN	```
+.JA	```ruby
+.JA	class Post < ActiveRecord::Base
+.JA	  validates :title, presence: true,
+.JA	                    length: { minimum: 5 }
+.JA	end
+.JA	```
+
+.EN	These changes will ensure that all posts have a title that is at least five characters long.
+.EN	Rails can validate a variety of conditions in a model, including the presence or uniqueness of columns, their
+.EN	format, and the existence of associated objects. Validations are covered in detail
+.EN	in [Active Record Validations and Callbacks](active_record_validations_callbacks.html#validations-overview)
+.JA	この変更は全ての投稿のタイトルは、確実に5文字より長くなるようにします。
+.JA	Railsはモデル内でのカラムの存在や唯一性を含んでいるかを、形式や関連オブジェクトの存在も含めて確認することができる。
+.JA	Validationsに関する詳細は
+.JA	次を見てください[Active Record Validations and Callbacks](active_record_validations_callbacks.html#validations-overview)
+
+.EN	With the validation now in place, when you call `@post.save` on an invalid
+.EN	post, it will return `false`. If you open `app/controllers/posts_controller.rb`
+.EN	again, you'll notice that we don't check the result of calling `@post.save`
+.EN	inside the `create` action. If `@post.save` fails in this situation, we need to
+.EN	show the form back to the user. To do this, change the `new` and `create`
+.EN	actions inside `app/controllers/posts_controller.rb` to these:
+.JA	この状態で検証を行うと`@post.save`を呼んだときに無効な投稿であれば。`false`を返します。
+.JA	`app/controllers/posts_controller.rb`を開き直してみると、
+.JA	'create'アクション内で'@post.save'呼び出し結果を確認していない事に気づくでしょう。
+.JA	`@post.save`が失敗した場合はユーザーにフォームを返す必要があります。
+.JA	このことで`app/controllers/posts_controller.rb`内の
+.JA	`new`と`create`アクションを変える必要があります:
+
+.EN	```ruby
+.EN	def new
+.EN	  @post = Post.new
+.EN	end
+.JA	```ruby
+.JA	def new
+.JA	  @post = Post.new
+.JA	end
+
+.EN	def create
+.EN	  @post = Post.new(params[:post])
+.JA	def create
+.JA	  @post = Post.new(params[:post])
+
+.EN	  if @post.save
+.EN	    redirect_to action: :show, id: @post.id
+.EN	  else
+.EN	    render 'new'
+.EN	  end
+.EN	end
+.EN	```
+.JA	  if @post.save
+.JA	    redirect_to action: :show, id: @post.id
+.JA	  else
+.JA	    render 'new'
+.JA	  end
+.JA	end
+.JA	```
+
+.EN	The `new` action is now creating a new instance variable called `@post`, and
+.EN	you'll see why that is in just a few moments.
+.JA	`new`アクションは'@post'という新しい検証インスタンスを作成し、
+.JA	それは一瞬の間である理由がわかるでしょう。
+
+.EN	Notice that inside the `create` action we use `render` instead of `redirect_to` when `save`
+.EN	returns `false`. The `render` method is used so that the `@post` object is passed back to the `new` template when it is rendered. This rendering is done within the same request as the form submission, whereas the `redirect_to` will tell the browser to issue another request.
+.JA	`create`アクション内の'save'が'false'を返すときに'render'が'redirect_to'の代わりに使われていることに気付きます。 
+.JA	`render`メソッドは`@post`で使われており'@post'オブジェクトは描画されたときに'new'テンプレートに渡される 'redirect_to'はブラウザに別のリクエストが発生する事を知らせるのに対してこのレンダリングはフォーム送信による同じリクエスト内で行われる。
+
+.EN	If you reload
+.EN	<http://localhost:3000/posts/new> and
+.EN	try to save a post without a title, Rails will send you back to the
+.EN	form, but that's not very useful. You need to tell the user that
+.EN	something went wrong. To do that, you'll modify
+.EN	`app/views/posts/new.html.erb` to check for error messages:
+.JA	<http://localhost:3000/posts/new>を再読み込みし
+.JA	タイトルなしの投稿を行うと、Railsはフォームを送り返します。
+.JA	でもそれはあまり使いやすくありません。
+.JA	ユーザーに何が間違っているか教える必要がありません。
+.JA	`app/views/posts/new.html.erb`を修正して
+.JA	エラーメッセージを確認するようにします。
+
+.EN	```html+erb
+.EN	<%= form_for :post, url: { action: :create } do |f| %>
+.EN	  <% if @post.errors.any? %>
+.EN	  <div id="errorExplanation">
+.EN	    <h2><%= pluralize(@post.errors.count, "error") %> prohibited
+.EN	      this post from being saved:</h2>
+.EN	    <ul>
+.EN	    <% @post.errors.full_messages.each do |msg| %>
+.EN	      <li><%= msg %></li>
+.EN	    <% end %>
+.EN	    </ul>
+.EN	  </div>
+.EN	  <% end %>
+.EN	  <p>
+.EN	    <%= f.label :title %><br>
+.EN	    <%= f.text_field :title %>
+.EN	  </p>
+.JA	```html+erb
+.JA	<%= form_for :post, url: { action: :create } do |f| %>
+.JA	  <% if @post.errors.any? %>
+.JA	  <div id="errorExplanation">
+.JA	    <h2><%= pluralize(@post.errors.count, "error") %> prohibited
+.JA	      this post from being saved:</h2>
+.JA	    <ul>
+.JA	    <% @post.errors.full_messages.each do |msg| %>
+.JA	      <li><%= msg %></li>
+.JA	    <% end %>
+.JA	    </ul>
+.JA	  </div>
+.JA	  <% end %>
+.JA	  <p>
+.JA	    <%= f.label :title %><br>
+.JA	    <%= f.text_field :title %>
+.JA	  </p>
+
+.EN	  <p>
+.EN	    <%= f.label :text %><br>
+.EN	    <%= f.text_area :text %>
+.EN	  </p>
+.JA	  <p>
+.JA	    <%= f.label :text %><br>
+.JA	    <%= f.text_area :text %>
+.JA	  </p>
+
+.EN	  <p>
+.EN	    <%= f.submit %>
+.EN	  </p>
+.EN	<% end %>
+.JA	  <p>
+.JA	    <%= f.submit %>
+.JA	  </p>
+.JA	<% end %>
+
+.EN	<%= link_to 'Back', action: :index %>
+.EN	```
+.JA	<%= link_to 'Back', action: :index %>
+.JA	```
+
+.EN	A few things are going on. We check if there are any errors with
+.EN	`@post.errors.any?`, and in that case we show a list of all
+.EN	errors with `@post.errors.full_messages`.
+.JA	ここで、いくつかの事が起こっています。
+.JA	もし'@post.errors.any?'に何かしらのエラーがあるなら、
+.JA	'@post.errors.full_messages'ですべてのエラーをリスト表示します
+
+.EN	`pluralize` is a rails helper that takes a number and a string as its
+.EN	arguments. If the number is greater than one, the string will be automatically pluralized.
+.JA	`pluralize`はrailsヘルパーで引数に数字と文字列を持ちます。
+.JA	数が1より大きい場合は、文字列は自動的に複数形になります。
+
+.EN	The reason why we added `@post = Post.new` in `posts_controller` is that
+.EN	otherwise `@post` would be `nil` in our view, and calling
+.EN	`@post.errors.any?` would throw an error.
+.JA	なぜ`posts_controller`に`@post = Post.new`が追加されたのかというと、
+.JA	`@post`はビューに`nil`を持ち、
+.JA	`@post.errors.any?`を呼び、エラーを投げます。
+
+.EN	TIP: Rails automatically wraps fields that contain an error with a div
+.EN	with class `field_with_errors`. You can define a css rule to make them
+.EN	standout.
+.JA	TIP: Railsは自動的に`field_with_errors`クラスで
+.EN	エラーを含むフィールドを覆います。
+.JA	そこに素晴らしいcssルールを定義することが出来ます。
+
+.EN	Now you'll get a nice error message when saving a post without title when you
+.EN	attempt to do just that on the new post form [(http://localhost:3000/posts/new)](http://localhost:3000/posts/new).
+.JA	新規投稿フォームでタイトルなしの投稿を試みようとしたとき
+.JA	エラーメッセージを見ることが出来ます[(http://localhost:3000/posts/new)](http://localhost:3000/posts/new).
+
+.EN	![Form With Errors](images/getting_started/form_with_errors.png)
+.JA	![Form With Errors](images/getting_started/form_with_errors.png)
+
+.EN	### Updating Posts
+.JA	### 投稿の更新
+
+.EN	We've covered the "CR" part of CRUD. Now let's focus on the "U" part, updating posts.
+.JA	CRUDの"CR"の範囲を扱います。 更新投稿の#U#の部分にフォーカスを当てましょう。
+
+.EN	The first step we'll take is adding an `edit` action to `posts_controller`.
+.JA	まずはじめに`posts_controller`に'edit'アクションを加えましょう。
+
+.EN	Start by adding a route to `config/routes.rb`:
+.JA	`config/routes.rb`にルートを加えましょう:
+
+.EN	```ruby
+.EN	get "posts/:id/edit" => "posts#edit"
+.EN	```
+.JA	```ruby
+.JA	get "posts/:id/edit" => "posts#edit"
+.JA	```
+
+.EN	And then add the controller action:
+.JA	コントローラーアクションにも加えます:
+
+.EN	```ruby
+.EN	def edit
+.EN	  @post = Post.find(params[:id])
+.EN	end
+.EN	```
+.JA	```ruby
+.JA	def edit
+.JA	  @post = Post.find(params[:id])
+.JA	end
+.JA	```
+
+.EN	The view will contain a form similar to the one we used when creating
+.EN	new posts. Create a file called `app/views/posts/edit.html.erb` and make
+.EN	it look as follows:
+.JA	ビューは新規投稿を作成するときに使うものと同じフォームを含んでいる。
+.JA	`app/views/posts/edit.html.erb`と呼ばれるファイルを作成し
+.JA	下記のように記述します。
+
+.EN	```html+erb
+.EN	<h1>Editing post</h1>
+.JA	```html+erb
+.JA	<h1>Editing post</h1>
+
+.EN	<%= form_for :post, url: { action: :update, id: @post.id },
+.EN	method: :patch do |f| %>
+.EN	  <% if @post.errors.any? %>
+.EN	  <div id="errorExplanation">
+.EN	    <h2><%= pluralize(@post.errors.count, "error") %> prohibited
+.EN	      this post from being saved:</h2>
+.EN	    <ul>
+.EN	    <% @post.errors.full_messages.each do |msg| %>
+.EN	      <li><%= msg %></li>
+.EN	    <% end %>
+.EN	    </ul>
+.EN	  </div>
+.EN	  <% end %>
+.EN	  <p>
+.EN	    <%= f.label :title %><br>
+.EN	    <%= f.text_field :title %>
+.EN	  </p>
+.JA	<%= form_for :post, url: { action: :update, id: @post.id },
+.JA	method: :patch do |f| %>
+.JA	  <% if @post.errors.any? %>
+.JA	  <div id="errorExplanation">
+.JA	    <h2><%= pluralize(@post.errors.count, "error") %> prohibited
+.JA	      this post from being saved:</h2>
+.JA	    <ul>
+.JA	    <% @post.errors.full_messages.each do |msg| %>
+.JA	      <li><%= msg %></li>
+.JA	    <% end %>
+.JA	    </ul>
+.JA	  </div>
+.JA	  <% end %>
+.JA	  <p>
+.JA	    <%= f.label :title %><br>
+.JA	    <%= f.text_field :title %>
+.JA	  </p>
+
+.EN	  <p>
+.EN	    <%= f.label :text %><br>
+.EN	    <%= f.text_area :text %>
+.EN	  </p>
+.JA	  <p>
+.JA	    <%= f.label :text %><br>
+.JA	    <%= f.text_area :text %>
+.JA	  </p>
+
+.EN	  <p>
+.EN	    <%= f.submit %>
+.EN	  </p>
+.EN	<% end %>
+.JA	  <p>
+.JA	    <%= f.submit %>
+.JA	  </p>
+.JA	<% end %>
+
+.EN	<%= link_to 'Back', action: :index %>
+.EN	```
+.JA	<%= link_to 'Back', action: :index %>
+.JA	```
+
+.EN	This time we point the form to the `update` action, which is not defined yet
+.EN	but will be very soon.
+.JA	今回`update`アクションにフォームの注目をします。
+.JA	'update'アクションはまだ定義していないので、定義をします。
+
+.EN	The `method: :patch` option tells Rails that we want this form to be
+.EN	submitted via the `PUT` HTTP method which is the HTTP method you're expected to use to
+.EN	**update** resources according to the REST protocol.
+.JA	`method: :patch`オプションはこのフォームはHTTPメソッドのRESTプロトコルに
+.JA	従って**update**が使われることを推測し
+.JA	HTTPメソッドの'PUT'の使って送信することをRailsに教えます。
+
+.EN	TIP: By default forms built with the _form_for_ helper are sent via `POST`.
+.JA	TIP: デフォルトフォームによる_form_for_ヘルパーの作成は`POST`を通して行われる。
+
+.EN	Next, we need to add the `update` action. The file
+.EN	`config/routes.rb` will need just one more line:
+.JA	次に、`update`アクションの追加の必要があります。
+.JA	`config/routes.rb`ファイルは下記の編集が必要です:
+
+.EN	```ruby
+.EN	patch "posts/:id" => "posts#update"
+.EN	```
+.JA	```ruby
+.JA	patch "posts/:id" => "posts#update"
+.JA	```
+
+.EN	And then create the `update` action in `app/controllers/posts_controller.rb`:
+.JA	`app/controllers/posts_controller.rb`内の`update`アクションの作成も必要です:
+
+.EN	```ruby
+.EN	def update
+.EN	  @post = Post.find(params[:id])
+.JA	```ruby
+.JA	def update
+.JA	  @post = Post.find(params[:id])
+
+.EN	  if @post.update(params[:post])
+.EN	    redirect_to action: :show, id: @post.id
+.EN	  else
+.EN	    render 'edit'
+.EN	  end
+.EN	end
+.EN	```
+.JA	  if @post.update(params[:post])
+.JA	    redirect_to action: :show, id: @post.id
+.JA	  else
+.JA	    render 'edit'
+.JA	  end
+.JA	end
+.JA	```
+
+.EN	The new method, `update`, is used when you want to update a record
+.EN	that already exists, and it accepts a hash containing the attributes
+.EN	that you want to update. As before, if there was an error updating the
+.EN	post we want to show the form back to the user.
+.JA	新しいメソッド`update`は既に存在するレコードの更新を行う時に使用されます。
+.JA	また、アップデートを行いたい属性を含んでいるハッシュを受け入れます。
+.JA	 このようにもし間違った更新が投稿によって行われた場合、
+.JA	 ユーザーにフォームを再表示したい。
+
+.EN	TIP: You don't need to pass all attributes to `update`. For
+.EN	example, if you'd call `@post.update(title: 'A new title')`
+.EN	Rails would only update the `title` attribute, leaving all other
+.EN	attributes untouched.
+.JA	TIP: `update`に対するすべての属性を渡す必要はありません。
+.JA	例えば、`@post.update(title: 'A new title')`を呼んだのなら、
+.JA	Railsは`title`属性を更新するだけでよく、
+.JA	他の属性について触れなくてよい。
+
+.EN	Finally, we want to show a link to the `edit` action in the list of all the
+.EN	posts, so let's add that now to `app/views/posts/index.html.erb` to make it
+.EN	appear next to the "Show" link:
+.JA	最後に、投稿全てのリストの中に'edit'アクションリンクを表示した場合、
+.JA	`app/views/posts/index.html.erb`に次に示すように
+.JA	"Show"リンクを追加すればよい。
+
+.EN	```html+erb
+.EN	<table>
+.EN	  <tr>
+.EN	    <th>Title</th>
+.EN	    <th>Text</th>
+.EN	    <th></th>
+.EN	    <th></th>
+.EN	  </tr>
+.JA	```html+erb
+.JA	<table>
+.JA	  <tr>
+.JA	    <th>Title</th>
+.JA	    <th>Text</th>
+.JA	    <th></th>
+.JA	    <th></th>
+.JA	  </tr>
+
+.EN	<% @posts.each do |post| %>
+.EN	  <tr>
+.EN	    <td><%= post.title %></td>
+.EN	    <td><%= post.text %></td>
+.EN	    <td><%= link_to 'Show', action: :show, id: post.id %></td>
+.EN	    <td><%= link_to 'Edit', action: :edit, id: post.id %></td>
+.EN	  </tr>
+.EN	<% end %>
+.EN	</table>
+.EN	```
+.JA	<% @posts.each do |post| %>
+.JA	  <tr>
+.JA	    <td><%= post.title %></td>
+.JA	    <td><%= post.text %></td>
+.JA	    <td><%= link_to 'Show', action: :show, id: post.id %></td>
+.JA	    <td><%= link_to 'Edit', action: :edit, id: post.id %></td>
+.JA	  </tr>
+.JA	<% end %>
+.JA	</table>
+.JA	```
+
+.EN	And we'll also add one to the `app/views/posts/show.html.erb` template as well,
+.EN	so that there's also an "Edit" link on a post's page. Add this at the bottom of
+.EN	the template:
+.JA	そして、`app/views/posts/show.html.erb`テンプレートにも
+.JA	また投稿ページ上に次を加えればよい。 
+.JA	次をテンプレートの下に追加してください:
+
+.EN	```html+erb
+.EN	...
+.JA	```html+erb
+.JA	...
+
+.EN	<%= link_to 'Back', action: :index %>
+.EN	| <%= link_to 'Edit', action: :edit, id: @post.id %>
+.EN	```
+.JA	<%= link_to 'Back', action: :index %>
+.JA	| <%= link_to 'Edit', action: :edit, id: @post.id %>
+.JA	```
+
+.EN	And here's how our app looks so far:
+.JA	そして、ここまででアプリがどのように見えるか示します。
+
+.EN	![Index action with edit link](images/getting_started/index_action_with_edit_link.png)
+.JA	![Index action with edit link](images/getting_started/index_action_with_edit_link.png)
+
+.EN	### Using partials to clean up duplication in views
+.JA	### ビュー内で複製を除去する部分的な使用
+
+.EN	Our `edit` page looks very similar to the `new` page, in fact they
+.EN	both share the same code for displaying the form. Let's remove some duplication
+.EN	by using a view partial. By convention, partial files are prefixed by an
+.EN	underscore.
+.JA	`edit`ページは`new`ページととても似ていて、
+.JA	実際フォームを表示するのに同じコードを共有している。
+.JA	この重複を部分的ビューを使って削除しましょう。
+.JA	部分的なファイルは接頭語にアンダーバーを置くのが慣習になっています。
+
+.EN	TIP: You can read more about partials in the
+.EN	[Layouts and Rendering in Rails](layouts_and_rendering.html) guide.
+.JA	TIP: partialsについては次を読むと参考になります。
+.JA	[Layouts and Rendering in Rails](layouts_and_rendering.html) guide.
+
+.EN	Create a new file `app/views/posts/_form.html.erb` with the following
+.EN	content:
+.JA	新規ファイル`app/views/posts/_form.html.erb`を作成し下記の内容を
+.JA	記述してください。
+
+.EN	```html+erb
+.EN	<%= form_for @post do |f| %>
+.EN	  <% if @post.errors.any? %>
+.EN	  <div id="errorExplanation">
+.EN	    <h2><%= pluralize(@post.errors.count, "error") %> prohibited
+.EN	      this post from being saved:</h2>
+.EN	    <ul>
+.EN	    <% @post.errors.full_messages.each do |msg| %>
+.EN	      <li><%= msg %></li>
+.EN	    <% end %>
+.EN	    </ul>
+.EN	  </div>
+.EN	  <% end %>
+.EN	  <p>
+.EN	    <%= f.label :title %><br>
+.EN	    <%= f.text_field :title %>
+.EN	  </p>
+.JA	```html+erb
+.JA	<%= form_for @post do |f| %>
+.JA	  <% if @post.errors.any? %>
+.JA	  <div id="errorExplanation">
+.JA	    <h2><%= pluralize(@post.errors.count, "error") %> prohibited
+.JA	      this post from being saved:</h2>
+.JA	    <ul>
+.JA	    <% @post.errors.full_messages.each do |msg| %>
+.JA	      <li><%= msg %></li>
+.JA	    <% end %>
+.JA	    </ul>
+.JA	  </div>
+.JA	  <% end %>
+.JA	  <p>
+.JA	    <%= f.label :title %><br>
+.JA	    <%= f.text_field :title %>
+.JA	  </p>
+
+.EN	  <p>
+.EN	    <%= f.label :text %><br>
+.EN	    <%= f.text_area :text %>
+.EN	  </p>
+.JA	  <p>
+.JA	    <%= f.label :text %><br>
+.JA	    <%= f.text_area :text %>
+.JA	  </p>
+
+.EN	  <p>
+.EN	    <%= f.submit %>
+.EN	  </p>
+.EN	<% end %>
+.EN	```
+.JA	  <p>
+.JA	    <%= f.submit %>
+.JA	  </p>
+.JA	<% end %>
+.JA	```
+
+.EN	Everything except for the `form_for` declaration remained the same.
+.EN	How `form_for` can figure out the right `action` and `method` attributes
+.EN	when building the form will be explained in just a moment. For now, let's update the
+.EN	`app/views/posts/new.html.erb` view to use this new partial, rewriting it
+.EN	completely:
+.JA	`form_for`を除いて全てのの宣言が同じであった。
+.JA	フォームを作るときに`form_for`はどのように`action`と`method`属性を
+.JA	区別することができるのかの説明は少し待ってください。
+.JA	`app/views/posts/new.html.erb`のビューをこの新しいpartialを使って更新し、
+.JA	完全に書き直しましょう:
+
+.EN	```html+erb
+.EN	<h1>New post</h1>
+.JA	```html+erb
+.JA	<h1>New post</h1>
+
+.EN	<%= render 'form' %>
+.JA	<%= render 'form' %>
+
+.EN	<%= link_to 'Back', action: :index %>
+.EN	```
+.JA	<%= link_to 'Back', action: :index %>
+.JA	```
+
+.EN	Then do the same for the `app/views/posts/edit.html.erb` view:
+.JA	`app/views/posts/edit.html.erb`ビューについても同じで:
+
+.EN	```html+erb
+.EN	<h1>Edit post</h1>
+.JA	```html+erb
+.JA	<h1>Edit post</h1>
+
+.EN	<%= render 'form' %>
+.JA	<%= render 'form' %>
+
+.EN	<%= link_to 'Back', action: :index %>
+.EN	```
+.JA	<%= link_to 'Back', action: :index %>
+.JA	```
+
+.EN	Point your browser to <http://localhost:3000/posts/new> and
+.EN	try creating a new post. Everything still works. Now try editing the
+.EN	post and you'll receive the following error:
+.JA	<http://localhost:3000/posts/new>をブラウザで表示し、
+.JA	新規投稿を作成してください。 まだ作業は残っています。
+.JA	書き込みを投稿すると下記エラーを受け取ることになります。
+
+.EN	![Undefined method post_path](images/getting_started/undefined_method_post_path.png)
+.JA	![Undefined method post_path](images/getting_started/undefined_method_post_path.png)
+
+.EN	To understand this error, you need to understand how `form_for` works.
+.EN	When you pass an object to `form_for` and you don't specify a `:url`
+.EN	option, Rails will try to guess the `action` and `method` options by
+.EN	checking if the passed object is a new record or not. Rails follows the
+.EN	REST convention, so to create a new `Post` object it will look for a
+.EN	route named `posts_path`, and to update a `Post` object it will look for
+.EN	a route named `post_path` and pass the current object. Similarly, rails
+.EN	knows that it should create new objects via POST and update them via
+.EN	PUT.
+.JA	このエラーを理解するには、どのように`form_for`が動作するのか理解する必要があります。
+.JA	`form_for`にオブジェクトを渡し`:url`オプションを明確にしない時、
+.JA	Railsは`action`と`method`オプションを渡されたオブジェクトが
+.JA	新しいレコードかどうかを確認し推測しています。
+.JA	RailsはREST慣習に従い、新規`Post`オブジェトを作成し、
+.JA	それは`posts_path`と名付けたルートに寄ってみることがでる。
+.JA	また、更新'Post'オブジェクトは`post_path`と名付けられたルートによって見ることができ、
+.JA	現在のオブジェクトに渡します。
+.JA	同様に, railsはPOSTによる新規オブジェクトの作成かPUTによる更新オブジェクトの作成か判断できる。
+
+.EN	If you run `rake routes` from the console you'll see that we already
+.EN	have a `posts_path` route, which was created automatically by Rails when we
+.EN	defined the route for the index action.
+.EN	However, we don't have a `post_path` yet, which is the reason why we
+.EN	received an error before. With your server running you can view your routes by visiting [localhost:3000/rails/info/routes](http://localhost:3000/rails/info/routes), or you can generate them from the command line by running `rake routes`:
+.JA	もし、コンソールで`rake routes`を走らせ、すでに'posts_path'ルートを見ているなら、
+.JA	ルートはインデックスアクションでルートを定義したときRailsによって自動的に作成されています。
+.JA	しかし`post_path`をいまだに持ってなく、その理由は前にエラーを受け取ったからです。
+.JA	動作しているサーバーで[localhost:3000/rails/info/routes](http://localhost:3000/rails/info/routes)を
+.JA	訪れることでルートを見ぶことができる。又はコマンドラインで`rake routes`を実行することで生成できます:
+
+.EN	```bash
+.EN	$ rake routes
+.JA	```bash
+.JA	$ rake routes
+
+.EN	    posts GET  /posts(.:format)            posts#index
+.EN	posts_new GET  /posts/new(.:format)        posts#new
+.EN	          POST /posts(.:format)            posts#create
+.EN	          GET  /posts/:id(.:format)        posts#show
+.EN	          GET  /posts/:id/edit(.:format)   posts#edit
+.EN	          PUT  /posts/:id(.:format)        posts#update
+.EN	     root      /                           welcome#index
+.EN	```
+.JA	    posts GET  /posts(.:format)            posts#index
+.JA	posts_new GET  /posts/new(.:format)        posts#new
+.JA	          POST /posts(.:format)            posts#create
+.JA	          GET  /posts/:id(.:format)        posts#show
+.JA	          GET  /posts/:id/edit(.:format)   posts#edit
+.JA	          PUT  /posts/:id(.:format)        posts#update
+.JA	     root      /                           welcome#index
+.JA	```
+
+.EN	To fix this, open `config/routes.rb` and modify the `get "posts/:id"`
+.EN	line like this:
+.JA	これを直すのに`config/routes.rb`と`get "posts/:id"`
+を次のように直します。
+
+.EN	```ruby
+.EN	get "posts/:id" => "posts#show", as: :post
+.EN	```
+.JA	```ruby
+.JA	get "posts/:id" => "posts#show", as: :post
+.JA	```
+
+.EN	The `:as` option tells the `get` method that we want to make routing helpers
+.EN	called `post_url` and `post_path` available to our application. These are
+.EN	precisely the methods that the `form_for` needs when editing a post, and so now
+.EN	you'll be able to update posts again.
+.JA	`:as`オプションは'get'メソッドに
+.JA	アプリケーションで利用可能なルーティングヘルパーの'post_url'と'post_path'と呼ばれるものを作りたいと伝える。
+.JA	これは明確に'form_for'が編集や投稿をするときに必要になるいうメソッドで、
+.JA	再度更新投稿が可能になる。
+
+.EN	NOTE: The `:as` option is available on the `post`, `patch`, `put`, `delete` and `match`
+.EN	routing methods also.
+.JA	NOTE: `:as`オプションは`post'、 `patch`、 `put`、 `delete` 、`match`
+.JA	ルーティングメソッドが利用可能である。
+
+.EN	### Deleting Posts
+.JA	### 投稿の削除
+
+.EN	We're now ready to cover the "D" part of CRUD, deleting posts from the
+.EN	database. Following the REST convention, we're going to add a route for
+.EN	deleting posts to `config/routes.rb`:
+.JA	CRUDの"D"について説明します。データベースから、
+.JA	投稿を削除することです。
+.JA	REST慣習に従って'config/routes.rb'に削除投稿のルートを追加します。
+
+.EN	```ruby
+.EN	delete "posts/:id" => "posts#destroy"
+.EN	```
+.JA	```ruby
+.JA	delete "posts/:id" => "posts#destroy"
+.JA	```
+
+.EN	The `delete` routing method should be used for routes that destroy
+.EN	resources. If this was left as a typical `get` route, it could be possible for
+.EN	people to craft malicious URLs like this:
+.JA	`delete`ルーティングメソッドは投稿を破棄するルートに使われるものである。
+.JA	典型的な'get'ルートから離れたなら、
+.JA	次のようにずるくて悪意のあるURLリンクを提供することが可能である。
+
+.EN	```html
+.EN	<a href='http://example.com/posts/1/destroy'>look at this cat!</a>
+.EN	```
+.JA	```html
+.JA	<a href='http://example.com/posts/1/destroy'>look at this cat!</a>
+.JA	```
+
+.EN	We use the `delete` method for destroying resources, and this route is mapped to
+.EN	the `destroy` action inside `app/controllers/posts_controller.rb`, which doesn't exist yet, but is
+.EN	provided below:
+.JA	投稿の削除に`delete`メソッドを使うには、
+.EN	このルートを`app/controllers/posts_controller.rb`内の
+.EN	'destroy`アクションに関連付ける。これをするには下記に従ってください:
+
+.EN	```ruby
+.EN	def destroy
+.EN	  @post = Post.find(params[:id])
+.EN	  @post.destroy
+.JA	```ruby
+.JA	def destroy
+.JA	  @post = Post.find(params[:id])
+.JA	  @post.destroy
+
+.EN	  redirect_to action: :index
+.EN	end
+.EN	```
+.JA	  redirect_to action: :index
+.JA	end
+.JA	```
+
+.EN	You can call `destroy` on Active Record objects when you want to delete
+.EN	them from the database. Note that we don't need to add a view for this
+.EN	action since we're redirecting to the `index` action.
+.JA	データベースから投稿を削除したいとき、
+.JA	アクティブレコードオブジェクトの`destroy`を呼ぶことができる。
+.JA	注意として、'index'アクションにリダイレクトするので、このアクションにビューを加える必要はない。
+
+.EN	Finally, add a 'destroy' link to your `index` action template
+.EN	(`app/views/posts/index.html.erb`) to wrap everything
+.EN	together.
+.JA	最後に一緒にすべてをラップするために`index`
+.JA	アクションテンプレートに'destroy'リンク(`app/views/posts/index.html.erb`)を
+.JA	追加する。
+
+.EN	```html+erb
+.EN	<h1>Listing Posts</h1>
+.EN	<table>
+.EN	  <tr>
+.EN	    <th>Title</th>
+.EN	    <th>Text</th>
+.EN	    <th></th>
+.EN	    <th></th>
+.EN	    <th></th>
+.EN	  </tr>
+.JA	```html+erb
+.JA	<h1>Listing Posts</h1>
+.JA	<table>
+.JA	  <tr>
+.JA	    <th>Title</th>
+.JA	    <th>Text</th>
+.JA	    <th></th>
+.JA	    <th></th>
+.JA	    <th></th>
+.JA	  </tr>
+
+.EN	<% @posts.each do |post| %>
+.EN	  <tr>
+.EN	    <td><%= post.title %></td>
+.EN	    <td><%= post.text %></td>
+.EN	    <td><%= link_to 'Show', action: :show, id: post.id %></td>
+.EN	    <td><%= link_to 'Edit', action: :edit, id: post.id %></td>
+.EN	    <td><%= link_to 'Destroy', { action: :destroy, id: post.id },
+.EN	                    method: :delete, data: { confirm: 'Are you sure?' } %></td>
+.EN	  </tr>
+.EN	<% end %>
+.EN	</table>
+.EN	```
+.JA	<% @posts.each do |post| %>
+.JA	  <tr>
+.JA	    <td><%= post.title %></td>
+.JA	    <td><%= post.text %></td>
+.JA	    <td><%= link_to 'Show', action: :show, id: post.id %></td>
+.JA	    <td><%= link_to 'Edit', action: :edit, id: post.id %></td>
+.JA	    <td><%= link_to 'Destroy', { action: :destroy, id: post.id },
+.JA	                    method: :delete, data: { confirm: 'Are you sure?' } %></td>
+.JA	  </tr>
+.JA	<% end %>
+.JA	</table>
+.JA	```
+
+.EN	Here we're using `link_to` in a different way. We wrap the
+.EN	`:action` and `:id` attributes in a hash so that we can pass those two keys in
+.EN	first as one argument, and then the final two keys as another argument. The `:method` and `:'data-confirm'`
+.EN	options are used as HTML5 attributes so that when the link is clicked,
+.EN	Rails will first show a confirm dialog to the user, and then submit the link with method `delete`.
+.EN	This is done via the JavaScript file `jquery_ujs` which is automatically included
+.EN	into your application's layout (`app/views/layouts/application.html.erb`) when you
+.EN	generated the application. Without this file, the confirmation dialog box wouldn't appear.
+.JA	ここで`link_to`を違った方法で使用している。
+.JA	ハッシュの中で`:action`と`:id`属性をラップしていて、始めは1つ目の引数、
+.JA	最後の2つのキーは別の引数である2つのキーを渡すことができる。
+.JA	`:method`と`:'data-confirm'`オプションはHTML5属性のリンクをクリックしたときに使われる、
+.JA	Railsはユーザーに対して初めに設定画面をみせ、'delete'メソッドのリンクを送信します。
+.JA	これはアプリケーションを生成した時にJavaScriptファイルの`jquery_ujs`で渡され、
+.JA	自動的にアプリケーションのレイアウト(`app/views/layouts/application.html.erb`)に含まれます。 
+.JA	このファイルなしに、確認画面はあらわれません。
+
+.EN	![Confirm Dialog](images/getting_started/confirm_dialog.png)
+.JA	![Confirm Dialog](images/getting_started/confirm_dialog.png)
+
+.EN	Congratulations, you can now create, show, list, update and destroy
+.EN	posts. In the next section will see how Rails can aid us when creating
+.EN	REST applications, and how we can refactor our Blog app to take
+.EN	advantage of it.
+.JA	おめでとうございます。これで、作成、閲覧とリスト表示、更新、削除ができるようになりました。
+.JA	次の章でRailsはRESTアプリケーションを作成するときに
+.JA	どのような手助けをしてくれるのか、どのようにBlogアプリを改善して
+.JA	より良くしていくことができるのか見せたいと思います。
+
+.EN	### Going Deeper into REST
+.JA	### RESTの深みへ
+
+.EN	We've now covered all the CRUD actions of a REST app. We did so by
+.EN	declaring separate routes with the appropriate verbs into
+.EN	`config/routes.rb`. Here's how that file looks so far:
+.JA	これまでで私たちはRESTアプリのCRUD全ての動作を含んでいます。
+.JA	`config/routes.rb`に適切な同士で別々のルートを宣言することによってそういったことを行ってきました。
+.JA	 ここで、どのようにファイルが見えているか見てみましょう:
+
+.EN	```ruby
+.EN	get "posts" => "posts#index"
+.EN	get "posts/new"
+.EN	post "posts" => "posts#create"
+.EN	get "posts/:id" => "posts#show", as: :post
+.EN	get "posts/:id/edit" => "posts#edit"
+.EN	patch "posts/:id" => "posts#update"
+.EN	delete "posts/:id" => "posts#destroy"
+.EN	```
+.JA	```ruby
+.JA	get "posts" => "posts#index"
+.JA	get "posts/new"
+.JA	post "posts" => "posts#create"
+.JA	get "posts/:id" => "posts#show", as: :post
+.JA	get "posts/:id/edit" => "posts#edit"
+.JA	patch "posts/:id" => "posts#update"
+.JA	delete "posts/:id" => "posts#destroy"
+.JA	```
+
+.EN	That's a lot to type for covering a single **resource**. Fortunately,
+.EN	Rails provides a `resources` method which can be used to declare a
+.EN	standard REST resource. Here's how `config/routes.rb` looks after the
+.EN	cleanup:
+.JA	沢山のある一つの**resource**を含んでいる。
+.JA	幸運にも、Railsは標準のRESTリソースを宣言するのに
+.JA	使うことができる`resources`メソッドを提供している。
+.JA	ここで、どのように`config/routes.rb`が見えているか整理してみる。
+
+.EN	```ruby
+.EN	Blog::Application.routes.draw do
+.JA	```ruby
+.JA	Blog::Application.routes.draw do
+
+.EN	  resources :posts
+.JA	  resources :posts
+
+.EN	  root to: "welcome#index"
+.EN	end
+.EN	```
+.JA	  root to: "welcome#index"
+.JA	end
+.JA	```
+
+.EN	If you run `rake routes`, you'll see that all the routes that we
+.EN	declared before are still available:
+.JA	もし`rake routes`を実行すると、私たちが宣言したい
+.JA	まだ利用可能なルートすべてを見ることができる:
+
+.EN	```bash
+.EN	$ rake routes
+.EN	    posts GET    /posts(.:format)          posts#index
+.EN	          POST   /posts(.:format)          posts#create
+.EN	 new_post GET    /posts/new(.:format)      posts#new
+.EN	edit_post GET    /posts/:id/edit(.:format) posts#edit
+.EN	     post GET    /posts/:id(.:format)      posts#show
+.EN	          PUT    /posts/:id(.:format)      posts#update
+.EN	          DELETE /posts/:id(.:format)      posts#destroy
+.EN	     root        /                         welcome#index
+.EN	```
+.JA	```bash
+.JA	$ rake routes
+.JA	    posts GET    /posts(.:format)          posts#index
+.JA	          POST   /posts(.:format)          posts#create
+.JA	 new_post GET    /posts/new(.:format)      posts#new
+.JA	edit_post GET    /posts/:id/edit(.:format) posts#edit
+.JA	     post GET    /posts/:id(.:format)      posts#show
+.JA	          PUT    /posts/:id(.:format)      posts#update
+.JA	          DELETE /posts/:id(.:format)      posts#destroy
+.JA	     root        /                         welcome#index
+.JA	```
+
+.EN	Also, if you go through the motions of creating, updating and deleting
+.EN	posts the app still works as before.
+.JA	投稿を作成、更新、削除する動きを行う場合にも、
+.JA	アプリはまだ以前のように動作します。
+
+.EN	TIP: In general, Rails encourages the use of resources objects in place
+.EN	of declaring routes manually. It was only done in this guide as a learning
+.EN	exercise. For more information about routing, see
+.EN	[Rails Routing from the Outside In](routing.html).
+.JA	TIP: 一般的に、Railsはルートを手で宣言する代わりに、リソースオブジェクトの使用を推奨しています。
+.JA	それが唯一このガイドの学習として行われていました。
+.JA	ルーティングに関するより詳細な情報は次をご覧ください
+.JA	[Rails Routing from the Outside In](routing.html)。
+
+.EN	Adding a Second Model
+.EN	---------------------
+.JA	第2のモデルの追加
+.JA	---------------------
+
+.EN	It's time to add a second model to the application. The second model will handle comments on
+.EN	posts.
+.JA	アプリケーションに第2のモデルを加えます。
+.JA	第2のモデルは投稿に対するコメントを処理します。
+
+.EN	### Generating a Model
+.JA	### モデルの作成
+
+.EN	We're going to see the same generator that we used before when creating
+.EN	the `Post` model. This time we'll create a `Comment` model to hold
+.EN	reference of post comments. Run this command in your terminal:
+.JA	'Post'モデルを作った時と同じようにジェネレーターを使います。
+.JA	今回作成するのはコメントの投稿を参照する`Commentモデルです。 
+.JA	ターミナルで次のコマンドを実行してください:
+
+.EN	```bash
+.EN	$ rails generate model Comment commenter:string body:text post:references
+.EN	```
+.JA	```bash
+.JA	$ rails generate model Comment commenter:string body:text post:references
+.JA	```
+
+.EN	This command will generate four files:
+.JA	このコマンドは4つのファイルを作成します:
+
+.EN	| File                                         | Purpose                                                                                                |
+.EN	| -------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+.EN	| db/migrate/20100207235629_create_comments.rb | Migration to create the comments table in your database (your name will include a different timestamp) |
+.EN	| app/models/comment.rb                        | The Comment model                                                                                      |
+.EN	| test/models/comment_test.rb                  | Testing harness for the comments model                                                                 |
+.EN	| test/fixtures/comments.yml                   | Sample comments for use in testing                                                                     |
+.JA	| File                                         | Purpose                                                                                                |
+.JA	| -------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+.JA	| db/migrate/20100207235629_create_comments.rb | Migration to create the comments table in your database (your name will include a different timestamp) |
+.JA	| app/models/comment.rb                        | The Comment model                                                                                      |
+.JA	| test/models/comment_test.rb                  | Testing harness for the comments model                                                                 |
+.JA	| test/fixtures/comments.yml                   | Sample comments for use in testing                                                                     |
+
+.EN	First, take a look at `app/models/comment.rb`:
+.JA	始めに`app/models/comment.rb`について見てみます:
+
+.EN	```ruby
+.EN	class Comment < ActiveRecord::Base
+.EN	  belongs_to :post
+.EN	end
+.EN	```
+.JA	```ruby
+.JA	class Comment < ActiveRecord::Base
+.JA	  belongs_to :post
+.JA	end
+.JA	```
+
+.EN	This is very similar to the `post.rb` model that you saw earlier. The difference
+.EN	is the line `belongs_to :post`, which sets up an Active Record _association_.
+.EN	You'll learn a little about associations in the next section of this guide.
+.JA	これは`post.rb`モデルととてもよく似ており、前に見たことがあります。
+.JA	異なる行は`belongs_to :post`でActive Record _association_で設定している。
+.JA	あなたはこのガイドの次の章で、関連付けに関する小さいことを学びます。
+
+.EN	In addition to the model, Rails has also made a migration to create the
+.EN	corresponding database table:
+.JA	モデルの追加で、Railsは関係するデータベーステーブルもまた
+.JA	migrationで作成しなおします。
+
+.EN	```ruby
+.EN	class CreateComments < ActiveRecord::Migration
+.EN	  def change
+.EN	    create_table :comments do |t|
+.EN	      t.string :commenter
+.EN	      t.text :body
+.EN	      t.references :post
+.JA	```ruby
+.JA	class CreateComments < ActiveRecord::Migration
+.JA	  def change
+.JA	    create_table :comments do |t|
+.JA	      t.string :commenter
+.JA	      t.text :body
+.JA	      t.references :post
+
+.EN	      t.timestamps
+.EN	    end
+.JA	      t.timestamps
+.JA	    end
+
+.EN	    add_index :comments, :post_id
+.EN	  end
+.EN	end
+.EN	```
+.JA	    add_index :comments, :post_id
+.JA	  end
+.JA	end
+.JA	```
+
+.EN	The `t.references` line sets up a foreign key column for the association between
+.EN	the two models. And the `add_index` line sets up an index for this association
+.EN	column. Go ahead and run the migration:
+.JA	`t.references`行は2つのモデルに関する外部キー列を組み立てる。 
+.JA	そして`add_index`行はこの関係列にインデックスを組み立てる。
+.JA	次に進みmigrationを実行します:
+
+.EN	```bash
+.EN	$ rake db:migrate
+.EN	```
+.JA	```bash
+.JA	$ rake db:migrate
+.JA	```
+
+.EN	Rails is smart enough to only execute the migrations that have not already been
+.EN	run against the current database, so in this case you will just see:
+.JA	Railsは十分に賢いので、現在のデータベースに対して既に実行していない事に対してだけmigrationsを実行します。
+.JA	この場合次の結果が見られます。
+
+.EN	```bash
+.EN	==  CreateComments: migrating =================================================
+.EN	-- create_table(:comments)
+.EN	   -> 0.0008s
+.EN	-- add_index(:comments, :post_id)
+.EN	   -> 0.0003s
+.EN	==  CreateComments: migrated (0.0012s) ========================================
+.EN	```
+.JA	```bash
+.JA	==  CreateComments: migrating =================================================
+.JA	-- create_table(:comments)
+.JA	   -> 0.0008s
+.JA	-- add_index(:comments, :post_id)
+.JA	   -> 0.0003s
+.JA	==  CreateComments: migrated (0.0012s) ========================================
+.JA	```
+
+.EN	### Associating Models
+.JA	### 関係モデル
+
+.EN	Active Record associations let you easily declare the relationship between two
+.EN	models. In the case of comments and posts, you could write out the relationships
+.EN	this way:
+.JA	アクティブレコード関係は2つのモデル間の関係を
+.JA	容易に定義しようとします。 
+.JA	コメントと投稿はこの場合、次の方法で関係を書き表すことができる。
+
+.EN	* Each comment belongs to one post.
+.EN	* One post can have many comments.
+.JA	* 各コメントは投稿に対して行われる。
+.JA	* 一つの投稿に対していくつでもコメントが可能。
+
+.EN	In fact, this is very close to the syntax that Rails uses to declare this
+.EN	association. You've already seen the line of code inside the `Comment` model (app/models/comment.rb) that
+.EN	makes each comment belong to a Post:
+.JA	実際これはRailsがこの関係を定義するために使用する文法にとても近いです。
+.JA	'Comment'モデル(app/models/comment.rb)内のコードのを既にみているなら、
+.JA	投稿によって各コメントが作られている。
+
+.EN	```ruby
+.EN	class Comment < ActiveRecord::Base
+.EN	  belongs_to :post
+.EN	end
+.EN	```
+.JA	```ruby
+.JA	class Comment < ActiveRecord::Base
+.JA	  belongs_to :post
+.JA	end
+.JA	```
+
+.EN	You'll need to edit `app/models/post.rb` to add the other side of the association:
+.JA	`app/models/post.rb`に対して関係の他の面を追加で編集する必要がある。
+
+.EN	```ruby
+.EN	class Post < ActiveRecord::Base
+.EN	  has_many :comments
+.EN	  validates :title, presence: true,
+.EN	                    length: { minimum: 5 }
+.EN	  [...]
+.EN	end
+.EN	```
+.JA	```ruby
+.JA	class Post < ActiveRecord::Base
+.JA	  has_many :comments
+.JA	  validates :title, presence: true,
+.JA	                    length: { minimum: 5 }
+.JA	  [...]
+.JA	end
+.JA	```
+
+.EN	These two declarations enable a good bit of automatic behavior. For example, if
+.EN	you have an instance variable `@post` containing a post, you can retrieve all
+.EN	the comments belonging to that post as an array using `@post.comments`.
+.JA	これらの2つの宣言は自動的ふるまいで作成することはできない。
+.JA	例えばインスタンス変数で'@post'を持っていて、投稿に含んでいるとする、
+.JA	'@post.comments'を使用した配列の投稿に属するすべてのコメントを取り出すことができる。
+
+.EN	TIP: For more information on Active Record associations, see the [Active Record
+.EN	Associations](association_basics.html) guide.
+.JA	TIP: アクティブレコード関係に関するより多くの情報は次のガイドを参照してください
+.JA	[Active Record Associations](association_basics.html)。
+
+.EN	### Adding a Route for Comments
+.JA	### コメントに関するルートの追加
+
+.EN	As with the `welcome` controller, we will need to add a route so that Rails knows
+.EN	where we would like to navigate to see `comments`. Open up the
+.EN	`config/routes.rb` file again, and edit it as follows:
+.JA	'welcome'コントローラーについて、
+.JA	Railsが`comments'に誘導して見れるように知らせる為に
+.JA	ルートの追加が必要になる。
+
+.EN	```ruby
+.EN	resources :posts do
+.EN	  resources :comments
+.EN	end
+.EN	```
+.JA	```ruby
+.JA	resources :posts do
+.JA	  resources :comments
+.JA	end
+.JA	```
+
+.EN	This creates `comments` as a _nested resource_ within `posts`. This is another
+.EN	part of capturing the hierarchical relationship that exists between posts and
+.EN	comments.
+.JA	これは'posts'内にa _nested resource_に従った
+.JA	`comments`を作成する。
+.JA	これは、投稿やコメントの間に存在する階層関係をとらえる別の部分です。
+
+.EN	TIP: For more information on routing, see the [Rails Routing](routing.html) guide.
+.JA	TIP: ルーティングに関するより詳細な情報は次のガイドを見てください[Rails Routing](routing.html)
+
+.EN	### Generating a Controller
+.JA	### コントローラーの作成
+
+.EN	With the model in hand, you can turn your attention to creating a matching
+.EN	controller. Again, we'll use the same generator we used before:
+.JA	手のモデルを使用すると、適合するコントローラーのの作成に目を向けることが出来ます。
+.JA	再度、同じジェネレーターを以下のように使う:
+
+.EN	```bash
+.EN	$ rails generate controller Comments
+.EN	```
+.JA	```bash
+.JA	$ rails generate controller Comments
+.JA	```
+
+.EN	This creates six files and one empty directory:
+.JA	6つのファイルと空のディレクトリが作成された:
+
+.EN	| File/Directory                               | Purpose                                  |
+.EN	| -------------------------------------------- | ---------------------------------------- |
+.EN	| app/controllers/comments_controller.rb       | The Comments controller                  |
+.EN	| app/views/comments/                          | Views of the controller are stored here  |
+.EN	| test/controllers/comments_controller_test.rb | The test for the controller              |
+.EN	| app/helpers/comments_helper.rb               | A view helper file                       |
+.EN	| test/helpers/comments_helper_test.rb         | The test for the helper                  |
+.EN	| app/assets/javascripts/comment.js.coffee     | CoffeeScript for the controller          |
+.EN	| app/assets/stylesheets/comment.css.scss      | Cascading style sheet for the controller |
+.JA	| File/Directory                               | Purpose                                  |
+.JA	| -------------------------------------------- | ---------------------------------------- |
+.JA	| app/controllers/comments_controller.rb       | The Comments controller                  |
+.JA	| app/views/comments/                          | Views of the controller are stored here  |
+.JA	| test/controllers/comments_controller_test.rb | The test for the controller              |
+.JA	| app/helpers/comments_helper.rb               | A view helper file                       |
+.JA	| test/helpers/comments_helper_test.rb         | The test for the helper                  |
+.JA	| app/assets/javascripts/comment.js.coffee     | CoffeeScript for the controller          |
+.JA	| app/assets/stylesheets/comment.css.scss      | Cascading style sheet for the controller |
+
+.EN	Like with any blog, our readers will create their comments directly after
+.EN	reading the post, and once they have added their comment, will be sent back to
+.EN	the post show page to see their comment now listed. Due to this, our
+.EN	`CommentsController` is there to provide a method to create comments and delete
+.EN	spam comments when they arrive.
+.JA	任意のブログと同様に、
+.JA	読者は投稿を読んだ後で直接コメントをし、
+.JA	コメントを追加すると、彼らのコメントが記載された投稿閲覧ページに送り返されます。
+.JA	これが原因で、スパムコメントを削除する方法を
+.JA	`CommentsController`は提供する。
+
+.EN	So first, we'll wire up the Post show template
+.EN	(`app/views/posts/show.html.erb`) to let us make a new comment:
+.JA	まずはじめに投稿閲覧テンプレート(`app/views/posts/show.html.erb`)が
+.JA	新しいコメントをするように紐付けます。
+
+.EN	```html+erb
+.EN	<p>
+.EN	  <strong>Title:</strong>
+.EN	  <%= @post.title %>
+.EN	</p>
+.JA	```html+erb
+.JA	<p>
+.JA	  <strong>Title:</strong>
+.JA	  <%= @post.title %>
+.JA	</p>
+
+.EN	<p>
+.EN	  <strong>Text:</strong>
+.EN	  <%= @post.text %>
+.EN	</p>
+.JA	<p>
+.JA	  <strong>Text:</strong>
+.JA	  <%= @post.text %>
+.JA	</p>
+
+.EN	<h2>Add a comment:</h2>
+.EN	<%= form_for([@post, @post.comments.build]) do |f| %>
+.EN	  <p>
+.EN	    <%= f.label :commenter %><br />
+.EN	    <%= f.text_field :commenter %>
+.EN	  </p>
+.EN	  <p>
+.EN	    <%= f.label :body %><br />
+.EN	    <%= f.text_area :body %>
+.EN	  </p>
+.EN	  <p>
+.EN	    <%= f.submit %>
+.EN	  </p>
+.EN	<% end %>
+.JA	<h2>Add a comment:</h2>
+.JA	<%= form_for([@post, @post.comments.build]) do |f| %>
+.JA	  <p>
+.JA	    <%= f.label :commenter %><br />
+.JA	    <%= f.text_field :commenter %>
+.JA	  </p>
+.JA	  <p>
+.JA	    <%= f.label :body %><br />
+.JA	    <%= f.text_area :body %>
+.JA	  </p>
+.JA	  <p>
+.JA	    <%= f.submit %>
+.JA	  </p>
+.JA	<% end %>
+
+.EN	<%= link_to 'Edit Post', edit_post_path(@post) %> |
+.EN	<%= link_to 'Back to Posts', posts_path %>
+.EN	```
+.JA	<%= link_to 'Edit Post', edit_post_path(@post) %> |
+.JA	<%= link_to 'Back to Posts', posts_path %>
+.JA	```
+
+.EN	This adds a form on the `Post` show page that creates a new comment by
+.EN	calling the `CommentsController` `create` action. The `form_for` call here uses
+.EN	an array, which will build a nested route, such as `/posts/1/comments`.
+.JA	'CommentsController''create'アクションによって呼ぶ
+.JA	新しいコメントの生成を'Post'閲覧ページ上のフォームに追加 `form_for`の呼び出しでは`/posts/1/comments`のような
+.JA	ネストされたルートを建設し、配列を使用します。
+
+.EN	Let's wire up the `create` in `app/controllers/comments_controller.rb`:
+.JA	`app/controllers/comments_controller.rb``create`を紐付ける:
+
+.EN	```ruby
+.EN	class CommentsController < ApplicationController
+.EN	  def create
+.EN	    @post = Post.find(params[:post_id])
+.EN	    @comment = @post.comments.create(params[:comment])
+.EN	    redirect_to post_path(@post)
+.EN	  end
+.EN	end
+.EN	```
+.JA	```ruby
+.JA	class CommentsController < ApplicationController
+.JA	  def create
+.JA	    @post = Post.find(params[:post_id])
+.JA	    @comment = @post.comments.create(params[:comment])
+.JA	    redirect_to post_path(@post)
+.JA	  end
+.JA	end
+.JA	```
+
+.EN	You'll see a bit more complexity here than you did in the controller for posts.
+.EN	That's a side-effect of the nesting that you've set up. Each request for a
+.EN	comment has to keep track of the post to which the comment is attached, thus the
+.EN	initial call to the `find` method of the `Post` model to get the post in question.
+.JA	投稿用のコントローラでやったことより複雑なことがここで見ることが出来ます。
+.JA	それは入れ子にして設定した副作用です。コメントに対するそれぞれの要求は、
+.JA	投稿に添付されたコメントの形跡を保たなければならない、このように
+.JA	'Post'モデルによる'find'メソッドでの最初の呼び出しは疑問の中で投稿が得られる。
+
+.EN	In addition, the code takes advantage of some of the methods available for an
+.EN	association. We use the `create` method on `@post.comments` to create and save
+.EN	the comment. This will automatically link the comment so that it belongs to that
+.EN	particular post.
+.JA	加えて、コードはメソッドが利用可能な関連に対するして活用している。
+.JA	コメントの作成と記録を行うために`@post.comments`上の'create'メソッドを使います。
+.JA	これは自動的に特定の投稿に従って
+.JA	コメントを関連付けます。
+
+.EN	Once we have made the new comment, we send the user back to the original post
+.EN	using the `post_path(@post)` helper. As we have already seen, this calls the
+.EN	`show` action of the `PostsController` which in turn renders the `show.html.erb`
+.EN	template. This is where we want the comment to show, so let's add that to the
+.EN	`app/views/posts/show.html.erb`.
+.JA	いったん新規のコメントをすると、`post_path(@post)`ヘルパーを使って
+.JA	ユーザーにオリジナルの投稿を返します。
+.JA	既に見たように、これは`show.html.erb`テンプレートで返す
+.JA	`PostsController'の'show'アクションと呼ばれます。
+.JA	コメントを表示させたいので、`app/views/posts/show.html.erb`に追加しよう。
+
+.EN	```html+erb
+.EN	<p>
+.EN	  <strong>Title:</strong>
+.EN	  <%= @post.title %>
+.EN	</p>
+.JA	```html+erb
+.JA	<p>
+.JA	  <strong>Title:</strong>
+.JA	  <%= @post.title %>
+.JA	</p>
+
+.EN	<p>
+.EN	  <strong>Text:</strong>
+.EN	  <%= @post.text %>
+.EN	</p>
+.JA	<p>
+.JA	  <strong>Text:</strong>
+.JA	  <%= @post.text %>
+.JA	</p>
+
+.EN	<h2>Comments</h2>
+.EN	<% @post.comments.each do |comment| %>
+.EN	  <p>
+.EN	    <strong>Commenter:</strong>
+.EN	    <%= comment.commenter %>
+.EN	  </p>
+.JA	<h2>Comments</h2>
+.JA	<% @post.comments.each do |comment| %>
+.JA	  <p>
+.JA	    <strong>Commenter:</strong>
+.JA	    <%= comment.commenter %>
+.JA	  </p>
+
+.EN	  <p>
+.EN	    <strong>Comment:</strong>
+.EN	    <%= comment.body %>
+.EN	  </p>
+.EN	<% end %>
+.JA	  <p>
+.JA	    <strong>Comment:</strong>
+.JA	    <%= comment.body %>
+.JA	  </p>
+.JA	<% end %>
+
+.EN	<h2>Add a comment:</h2>
+.EN	<%= form_for([@post, @post.comments.build]) do |f| %>
+.EN	  <p>
+.EN	    <%= f.label :commenter %><br />
+.EN	    <%= f.text_field :commenter %>
+.EN	  </p>
+.EN	  <p>
+.EN	    <%= f.label :body %><br />
+.EN	    <%= f.text_area :body %>
+.EN	  </p>
+.EN	  <p>
+.EN	    <%= f.submit %>
+.EN	  </p>
+.EN	<% end %>
+.JA	<h2>Add a comment:</h2>
+.JA	<%= form_for([@post, @post.comments.build]) do |f| %>
+.JA	  <p>
+.JA	    <%= f.label :commenter %><br />
+.JA	    <%= f.text_field :commenter %>
+.JA	  </p>
+.JA	  <p>
+.JA	    <%= f.label :body %><br />
+.JA	    <%= f.text_area :body %>
+.JA	  </p>
+.JA	  <p>
+.JA	    <%= f.submit %>
+.JA	  </p>
+.JA	<% end %>
+
+.EN	<%= link_to 'Edit Post', edit_post_path(@post) %> |
+.EN	<%= link_to 'Back to Posts', posts_path %>
+.EN	```
+.JA	<%= link_to 'Edit Post', edit_post_path(@post) %> |
+.JA	<%= link_to 'Back to Posts', posts_path %>
+.JA	```
+
+.EN	Now you can add posts and comments to your blog and have them show up in the
+.EN	right places.
+.JA	いまあなたのブログに投稿とコメントを追加すると、
+.JA	それらは適切な場所に表示されます。
+
+.EN	![Post with Comments](images/getting_started/post_with_comments.png)
+.JA	![Post with Comments](images/getting_started/post_with_comments.png)
+
+.EN	Refactoring
+.EN	-----------
+.JA	リファクタリング
+.JA	-----------
+
+.EN	Now that we have posts and comments working, take a look at the
+.EN	`app/views/posts/show.html.erb` template. It is getting long and awkward. We can
+.EN	use partials to clean it up.
+.JA	今、投稿とコメントの作業で`app/views/posts/show.html.erb`テンプレートに注目しました。
+.JA	それは長くて使いにくいものでした。
+.JA	それをきれいにすることが出来ます。
+
+.EN	### Rendering Partial Collections
+.JA	### コレクションの一部をレンダリングする
+
+.EN	First, we will make a comment partial to extract showing all the comments for the
+.EN	post. Create the file `app/views/comments/_comment.html.erb` and put the
+.EN	following into it:
+.JA	始めに、投稿からすべてのコメントを表示しながら抜き出すためにコメントの一部分を作ります。
+.JA	`app/views/comments/_comment.html.erb`ファイルを作成し、
+.JA	下記のように記述します:
+
+.EN	```html+erb
+.EN	<p>
+.EN	  <strong>Commenter:</strong>
+.EN	  <%= comment.commenter %>
+.EN	</p>
+.JA	```html+erb
+.JA	<p>
+.JA	  <strong>Commenter:</strong>
+.JA	  <%= comment.commenter %>
+.JA	</p>
+
+.EN	<p>
+.EN	  <strong>Comment:</strong>
+.EN	  <%= comment.body %>
+.EN	</p>
+.EN	```
+.JA	<p>
+.JA	  <strong>Comment:</strong>
+.JA	  <%= comment.body %>
+.JA	</p>
+.JA	```
+
+.EN	Then you can change `app/views/posts/show.html.erb` to look like the
+.EN	following:
+.JA	ここで、`app/views/posts/show.html.erb`をしたのように
+.JA	変えることが出来ます:
+
+.EN	```html+erb
+.EN	<p>
+.EN	  <strong>Title:</strong>
+.EN	  <%= @post.title %>
+.EN	</p>
+.JA	```html+erb
+.JA	<p>
+.JA	  <strong>Title:</strong>
+.JA	  <%= @post.title %>
+.JA	</p>
+
+.EN	<p>
+.EN	  <strong>Text:</strong>
+.EN	  <%= @post.text %>
+.EN	</p>
+.JA	<p>
+.JA	  <strong>Text:</strong>
+.JA	  <%= @post.text %>
+.JA	</p>
+
+.EN	<h2>Comments</h2>
+.EN	<%= render @post.comments %>
+.JA	<h2>Comments</h2>
+.JA	<%= render @post.comments %>
+
+.EN	<h2>Add a comment:</h2>
+.EN	<%= form_for([@post, @post.comments.build]) do |f| %>
+.EN	  <p>
+.EN	    <%= f.label :commenter %><br />
+.EN	    <%= f.text_field :commenter %>
+.EN	  </p>
+.EN	  <p>
+.EN	    <%= f.label :body %><br />
+.EN	    <%= f.text_area :body %>
+.EN	  </p>
+.EN	  <p>
+.EN	    <%= f.submit %>
+.EN	  </p>
+.EN	<% end %>
+.JA	<h2>Add a comment:</h2>
+.JA	<%= form_for([@post, @post.comments.build]) do |f| %>
+.JA	  <p>
+.JA	    <%= f.label :commenter %><br />
+.JA	    <%= f.text_field :commenter %>
+.JA	  </p>
+.JA	  <p>
+.JA	    <%= f.label :body %><br />
+.JA	    <%= f.text_area :body %>
+.JA	  </p>
+.JA	  <p>
+.JA	    <%= f.submit %>
+.JA	  </p>
+.JA	<% end %>
+
+.EN	<%= link_to 'Edit Post', edit_post_path(@post) %> |
+.EN	<%= link_to 'Back to Posts', posts_path %>
+.EN	```
+.JA	<%= link_to 'Edit Post', edit_post_path(@post) %> |
+.JA	<%= link_to 'Back to Posts', posts_path %>
+.JA	```
+
+.EN	This will now render the partial in `app/views/comments/_comment.html.erb` once
+.EN	for each comment that is in the `@post.comments` collection. As the `render`
+.EN	method iterates over the `@post.comments` collection, it assigns each
+.EN	comment to a local variable named the same as the partial, in this case
+.EN	`comment` which is then available in the partial for us to show.
+.JA	これは今`app/views/comments/_comment.html.erb`内の一部分を見せました、すると、`@post.comments`コレクションのどのコメントに対しても。 
+`render`メソッドは`@post.comments`コレクションを反復処理し、
+ローカル変数は部分的な同じ名前をつけるために
+それぞれのコメントを割り当てる。
+この場合`comment`はその時私たちに見せる為に部分的な利用が可能である。
+
+.EN	### Rendering a Partial Form
+.JA	### 部分的なフォームのレンダリング
+
+.EN	Let us also move that new comment section out to its own partial. Again, you
+.EN	create a file `app/views/comments/_form.html.erb` containing:
+.JA	新しいコメントセクションへパーシャルを移動しましょう。
+.JA	再び`app/views/comments/_form.html.erb`ファイルを作成し、下記を記述して下さい。
+
+.EN	```html+erb
+.EN	<%= form_for([@post, @post.comments.build]) do |f| %>
+.EN	  <p>
+.EN	    <%= f.label :commenter %><br />
+.EN	    <%= f.text_field :commenter %>
+.EN	  </p>
+.EN	  <p>
+.EN	    <%= f.label :body %><br />
+.EN	    <%= f.text_area :body %>
+.EN	  </p>
+.EN	  <p>
+.EN	    <%= f.submit %>
+.EN	  </p>
+.EN	<% end %>
+.EN	```
+.JA	```html+erb
+.JA	<%= form_for([@post, @post.comments.build]) do |f| %>
+.JA	  <p>
+.JA	    <%= f.label :commenter %><br />
+.JA	    <%= f.text_field :commenter %>
+.JA	  </p>
+.JA	  <p>
+.JA	    <%= f.label :body %><br />
+.JA	    <%= f.text_area :body %>
+.JA	  </p>
+.JA	  <p>
+.JA	    <%= f.submit %>
+.JA	  </p>
+.JA	<% end %>
+.JA	```
+
+.EN	Then you make the `app/views/posts/show.html.erb` look like the following:
+.JA	その時`app/views/posts/show.html.erb`は下記のようになるでしょう。
+
+.EN	```html+erb
+.EN	<p>
+.EN	  <strong>Title:</strong>
+.EN	  <%= @post.title %>
+.EN	</p>
+.JA	```html+erb
+.JA	<p>
+.JA	  <strong>Title:</strong>
+.JA	  <%= @post.title %>
+.JA	</p>
+
+.EN	<p>
+.EN	  <strong>Text:</strong>
+.EN	  <%= @post.text %>
+.EN	</p>
+.JA	<p>
+.JA	  <strong>Text:</strong>
+.JA	  <%= @post.text %>
+.JA	</p>
+
+.EN	<h2>Add a comment:</h2>
+.EN	<%= render "comments/form" %>
+.JA	<h2>Add a comment:</h2>
+.JA	<%= render "comments/form" %>
+
+.EN	<%= link_to 'Edit Post', edit_post_path(@post) %> |
+.EN	<%= link_to 'Back to Posts', posts_path %>
+.EN	```
+.JA	<%= link_to 'Edit Post', edit_post_path(@post) %> |
+.JA	<%= link_to 'Back to Posts', posts_path %>
+.JA	```
+
+.EN	The second render just defines the partial template we want to render,
+.EN	`comments/form`. Rails is smart enough to spot the forward slash in that
+.EN	string and realize that you want to render the `_form.html.erb` file in
+.EN	the `app/views/comments` directory.
+.JA	2つ目のrenderは定義するpartialテンプレートを`comments/form`で。
+.JA	Railsは賢いので文字列と実際の中の前のスラッシュを
+.JA	`app/views/comments`ディレクトリの中の
+.JA	`_form.html.erb`ファイルにレンダリングしたい。
+
+.EN	The `@post` object is available to any partials rendered in the view because we
+.EN	defined it as an instance variable.
+.JA	`@post`オブジェクトはどんなパーシャルでもビュー内でレンダリングが利用可能である、
+.EN	なぜならインスタンス変数を定義したからである。
+
+.EN	Deleting Comments
+.EN	-----------------
+.JA	コメントの削除
+.JA	-----------------
+
+.EN	Another important feature of a blog is being able to delete spam comments. To do
+.EN	this, we need to implement a link of some sort in the view and a `DELETE` action
+.EN	in the `CommentsController`.
+.JA	ブログの別の重要な特徴としてはスパムコメントを削除可能であることです。
+.JA	これをするにはソートのリンクと`CommentsController`内の
+.JA	`DELETE`アクション手段が必要。
+
+.EN	So first, let's add the delete link in the
+.EN	`app/views/comments/_comment.html.erb` partial:
+.JA	最初に`app/views/comments/_comment.html.erb`内の
+.JA	パーシャルに削除リンクを加えましょう:
+
+.EN	```html+erb
+.EN	<p>
+.EN	  <strong>Commenter:</strong>
+.EN	  <%= comment.commenter %>
+.EN	</p>
+.JA	```html+erb
+.JA	<p>
+.JA	  <strong>Commenter:</strong>
+.JA	  <%= comment.commenter %>
+.JA	</p>
+
+.EN	<p>
+.EN	  <strong>Comment:</strong>
+.EN	  <%= comment.body %>
+.EN	</p>
+.JA	<p>
+.JA	  <strong>Comment:</strong>
+.JA	  <%= comment.body %>
+.JA	</p>
+
+.EN	<p>
+.EN	  <%= link_to 'Destroy Comment', [comment.post, comment],
+.EN	               method: :delete,
+.EN	               data: { confirm: 'Are you sure?' } %>
+.EN	</p>
+.EN	```
+.JA	<p>
+.JA	  <%= link_to 'Destroy Comment', [comment.post, comment],
+.JA	               method: :delete,
+.JA	               data: { confirm: 'Are you sure?' } %>
+.JA	</p>
+.JA	```
+
+.EN	Clicking this new "Destroy Comment" link will fire off a `DELETE
+.EN	/posts/:post_id/comments/:id` to our `CommentsController`, which can then use
+.EN	this to find the comment we want to delete, so let's add a destroy action to our
+.EN	controller (`app/controllers/comments_controller.rb`):
+.JA	新しい"Destroy Comment"リンクをクリックすると、
+.JA	 `DELETE/posts/:post_id/comments/:id`が`CommentsController`に向けて送信され、
+.JA	これを使って削除したいコメントを見つけ、
+.JA	そしてコントローラー(`app/controllers/comments_controller.rb`)へ破壊行動を加えましょう:
+
+.EN	```ruby
+.EN	class CommentsController < ApplicationController
+.JA	```ruby
+.JA	class CommentsController < ApplicationController
+
+.EN	  def create
+.EN	    @post = Post.find(params[:post_id])
+.EN	    @comment = @post.comments.create(params[:comment])
+.EN	    redirect_to post_path(@post)
+.EN	  end
+.JA	  def create
+.JA	    @post = Post.find(params[:post_id])
+.JA	    @comment = @post.comments.create(params[:comment])
+.JA	    redirect_to post_path(@post)
+.JA	  end
+
+.EN	  def destroy
+.EN	    @post = Post.find(params[:post_id])
+.EN	    @comment = @post.comments.find(params[:id])
+.EN	    @comment.destroy
+.EN	    redirect_to post_path(@post)
+.EN	  end
+.JA	  def destroy
+.JA	    @post = Post.find(params[:post_id])
+.JA	    @comment = @post.comments.find(params[:id])
+.JA	    @comment.destroy
+.JA	    redirect_to post_path(@post)
+.JA	  end
+
+.EN	end
+.EN	```
+.JA	end
+.JA	```
+
+.EN	The `destroy` action will find the post we are looking at, locate the comment
+.EN	within the `@post.comments` collection, and then remove it from the
+.EN	database and send us back to the show action for the post.
+.JA	`destroy`アクションは`@post.comments`コレクションの中で
+.JA	コメントの位置を見つけ出しデータベースから削除して
+.JA	投稿への閲覧アクションを返します。
+
+
+.EN	### Deleting Associated Objects
+.JA	### 関連するオブジェクトの削除
+
+.EN	If you delete a post then its associated comments will also need to be deleted.
+.EN	Otherwise they would simply occupy space in the database. Rails allows you to
+.EN	use the `dependent` option of an association to achieve this. Modify the Post
+.EN	model, `app/models/post.rb`, as follows:
+.JA	もし、投稿を削除して関連するコメントもまた、削除が必要だとする。
+.JA	別にデータベース内で単純に場所を奪えばよい。 
+.JA	Railsはこれを成し遂げる為に関連する`dependent`オプションを使うことを許します。
+.JA	Postモデルの`app/models/post.rb`を書きに従って修正してください。
+
+.EN	```ruby
+.EN	class Post < ActiveRecord::Base
+.EN	  has_many :comments, dependent: :destroy
+.EN	  validates :title, presence: true,
+.EN	                    length: { minimum: 5 }
+.EN	  [...]
+.EN	end
+.EN	```
+.JA	```ruby
+.JA	class Post < ActiveRecord::Base
+.JA	  has_many :comments, dependent: :destroy
+.JA	  validates :title, presence: true,
+.JA	                    length: { minimum: 5 }
+.JA	  [...]
+.JA	end
+.JA	```
+
+.EN	Security
+.EN	--------
+.JA	セキュリティ
+.JA	--------
+
+.EN	If you were to publish your blog online, anybody would be able to add, edit and
+.EN	delete posts or delete comments.
+.JA	もし、ブログアプリをオンラインで公開する場合、
+.JA	誰もが書き込みや編集、投稿やコメントの削除をします。
+
+.EN	Rails provides a very simple HTTP authentication system that will work nicely in
+.EN	this situation.
+.JA	Railsはこの状況に良い機能でとても単純なHTTP認証システムを
+.JA	提供しています。
+
+.EN	In the `PostsController` we need to have a way to block access to the various
+.EN	actions if the person is not authenticated, here we can use the Rails
+.EN	`http_basic_authenticate_with` method, allowing access to the requested
+.EN	action if that method allows it.
+.JA	`PostsController`内で、もし、認証がないのなら様々な方法のブロックアクセスが必要です。
+.JA	ここではRailsの'http_basic_authenticate_with`メソッドを使うことで
+.JA	このメソッドが許可したものに対してリクエストアクションの
+.JA	アクセス許可が出来ます。
+
+.EN	To use the authentication system, we specify it at the top of our
+.EN	`PostsController`, in this case, we want the user to be authenticated on every
+.EN	action, except for `index` and `show`, so we write that in `app/controllers/posts_controller.rb`:
+.JA	認証システムを使うには、`PostsController`を明確にします、
+.JA	この場合私たちは`index`と`show`を除いたどのアクションにおいても、
+.JA	ユーザーを認証したい。これを`app/controllers/posts_controller.rb`の中に書きます:
+
+.EN	```ruby
+.EN	class PostsController < ApplicationController
+.JA	```ruby
+.JA	class PostsController < ApplicationController
+
+.EN	  http_basic_authenticate_with name: "dhh", password: "secret", except: [:index, :show]
+.JA	  http_basic_authenticate_with name: "dhh", password: "secret", except: [:index, :show]
+
+.EN	  def index
+.EN	    @posts = Post.all
+.EN	  end
+.JA	  def index
+.JA	    @posts = Post.all
+.JA	  end
+
+.EN	  # snipped for brevity
+.EN	```
+.JA	  # snipped for brevity
+.JA	```
+
+.EN	We also only want to allow authenticated users to delete comments, so in the
+.EN	`CommentsController` (`app/controllers/comments_controller.rb`) we write:
+.JA	私たちもまたコメントを削除するのに認証の許可をするだけ、
+.JA	そして、`CommentsController` (`app/controllers/comments_controller.rb`)に下記を書きます:
+
+.EN	```ruby
+.EN	class CommentsController < ApplicationController
+.JA	```ruby
+.JA	class CommentsController < ApplicationController
+
+.EN	  http_basic_authenticate_with name: "dhh", password: "secret", only: :destroy
+.JA	  http_basic_authenticate_with name: "dhh", password: "secret", only: :destroy
+
+.EN	  def create
+.EN	    @post = Post.find(params[:post_id])
+.EN	    ...
+.EN	  end
+.EN	  # snipped for brevity
+.EN	```
+.JA	  def create
+.JA	    @post = Post.find(params[:post_id])
+.JA	    ...
+.JA	  end
+.JA	  # snipped for brevity
+.JA	```
+
+.EN	Now if you try to create a new post, you will be greeted with a basic HTTP
+.EN	Authentication challenge
+.JA	今もし新しい投稿を作成しようとすると、
+.JA	基本的なHTTP認証申込みを見ることになります。
+
+.EN	![Basic HTTP Authentication Challenge](images/challenge.png)
+.JA	![Basic HTTP Authentication Challenge](images/challenge.png)
+
+.EN	What's Next?
+.EN	------------
+.JA	次は何をすればいい？
+.JA	------------
+
+.EN	Now that you've seen your first Rails application, you should feel free to
+.EN	update it and experiment on your own. But you don't have to do everything
+.EN	without help. As you need assistance getting up and running with Rails, feel
+.EN	free to consult these support resources:
+.JA	今、あなたの最初のRailsアプリケーションを見て、
+.JA	あなた自身で実験して思うがまま自由にアップデートするべきです。
+.JA	しかし助けなしでは何もできないでしょう。 あなたにとって必要な手伝いはRailsをやる事とやり続けることです、
+.JA	これらの手助けの資料を調べる事が自由になると感じます。
+
+.EN	* The [Ruby on Rails guides](index.html)
+.EN	* The [Ruby on Rails Tutorial](http://railstutorial.org/book)
+.EN	* The [Ruby on Rails mailing list](http://groups.google.com/group/rubyonrails-talk)
+.EN	* The [#rubyonrails](irc://irc.freenode.net/#rubyonrails) channel on irc.freenode.net
+.JA	* The [Ruby on Rails guides](index.html)
+.JA	* The [Ruby on Rails Tutorial](http://railstutorial.org/book)
+.JA	* The [Ruby on Rails mailing list](http://groups.google.com/group/rubyonrails-talk)
+.JA	* The [#rubyonrails](irc://irc.freenode.net/#rubyonrails) channel on irc.freenode.net
+
+.EN	Rails also comes with built-in help that you can generate using the rake command-line utility:
+.JA	Railsもまたrakeコマンドラインユーティリティーを使って作成することができる助けが備わっています:
+
+.EN	* Running `rake doc:guides` will put a full copy of the Rails Guides in the `doc/guides` folder of your application. Open `doc/guides/index.html` in your web browser to explore the Guides.
+.EN	* Running `rake doc:rails` will put a full copy of the API documentation for Rails in the `doc/api` folder of your application. Open `doc/api/index.html` in your web browser to explore the API documentation.
+.JA	* `rake doc:guides`を実行すれば、アプリケーションのフォルダ`doc/guides`内にRailsGuidesの完全コピーが手に入ります。 `doc/guides/index.html`をブラウザで開いてガイドを探検してみてください。
+.JA	* `rake doc:rails`を実行するとアプリケーションの`doc/api`フォルダ内にAPIドキュメントの完全コピーが手にはいります。 `doc/api/index.htmlをブラウザで開いてAPIドキュメントを探検してみてください。
+
+.EN	TIP: To be able to generate the Rails Guides locally with the `doc:guides` rake task you need to install the RedCloth gem. Add it to your `Gemfile` and run `bundle install` and you're ready to go.
+.JA	TIP: 'doc:guides'のRailsGuidesをrakeで生成するのが可能なのはRedCloth gemがインストールされている必要があります。 `Gemfile`の追加と`bundle install`の実行で準備は整います。
+
+.EN	Configuration Gotchas
+.EN	---------------------
+.JA	Configuration Gotchas
+.JA	---------------------
+
+.EN	The easiest way to work with Rails is to store all external data as UTF-8. If
+.EN	you don't, Ruby libraries and Rails will often be able to convert your native
+.EN	data into UTF-8, but this doesn't always work reliably, so you're better off
+.EN	ensuring that all external data is UTF-8.
+.JA	最も簡単な方法はRailsの行いは全てUTF-8によるデータで保存すること。 
+.JA	RubyのライブラリとRailsはしばしばUTF-8内のネイティブデータを変更することができる、
+.JA	しかしこれは何時も着実に仕事をしてくれるわけではない。
+.JA	なので、より良い状態で使うにはデータはUTF-8にしておく。
+
+.EN	If you have made a mistake in this area, the most common symptom is a black
+.EN	diamond with a question mark inside appearing in the browser. Another common
+.EN	symptom is characters like "Ã¼" appearing instead of "ü". Rails takes a number
+.EN	of internal steps to mitigate common causes of these problems that can be
+.EN	automatically detected and corrected. However, if you have external data that is
+.EN	not stored as UTF-8, it can occasionally result in these kinds of issues that
+.EN	cannot be automatically detected by Rails and corrected.
+.JA	もしもこの場所で間違いを起こすと、
+.JA	大抵共通した前兆としてブラウザにクエスションマークが表示されます。 
+.JA	別の共通する前兆として文字列が"ﾃｼ"の代わりに"ﾃδｼ"のように現れます。
+.JA	Railsはこれらの問題を無意識に見つけ正していき、
+.JA	いくつか共通の原因を本質的に和らげます。 
+.JA	しかしもし外字データをUTF-8でもっていないのなら、
+.JA	それは時折自動的に見つけることが出来ずRailsに問題を引き起こします。
+
+.EN	Two very common sources of data that are not UTF-8:
+.JA	2つのとても共通したUTF-8でないソース:
+
+.EN	* Your text editor: Most text editors (such as Textmate), default to saving files as
+.EN	  UTF-8. If your text editor does not, this can result in special characters that you
+.EN	  enter in your templates (such as é) to appear as a diamond with a question mark inside
+.EN	  in the browser. This also applies to your i18n translation files.
+.EN	  Most editors that do not already default to UTF-8 (such as some versions of
+.EN	  Dreamweaver) offer a way to change the default to UTF-8. Do so.
+.EN	* Your database. Rails defaults to converting data from your database into UTF-8 at
+.EN	  the boundary. However, if your database is not using UTF-8 internally, it may not
+.EN	  be able to store all characters that your users enter. For instance, if your database
+.EN	  is using Latin-1 internally, and your user enters a Russian, Hebrew, or Japanese
+.EN	  character, the data will be lost forever once it enters the database. If possible,
+.EN	  use UTF-8 as the internal storage of your database.
+.JA	* 普段使うテキストエディタ: 人気のあるエディタ (例えばTextmate)はデフォルトの保存がUTF-8です。 
+.JA	     もし、あなたのテキストエディタが違うのであれば、テンプレート内の(ﾃｩのような)特別な文字が
+.JA	     ダイアモンドとクエスションマークの含まれたブラウザの結果になります。
+.JA	     これもまたi18n翻訳ファイルを申し込む。
+.JA	      大体のエディタはデフォルトとしてUTF-8ではない(Dreamweaverのいくつかのバージョンのように)これを
+.JA	     デフォルトでUTF-8に変える方法を提供する。 そうすること。
+.JA	* データベースについて。 Railsはデフォルトでデータベースからの変換データは限界がUTF-8です。
+.JA	     しかし、もしあなたのデータベースが内部的にUTF-8を使っていないとしたら、
+.JA	     ユーザーが入力したすべての文字を格納することが出来ない。
+.JA	     例えばデータベースの内部でLatin-1を使っていて、ロシア語やヘブライ語、日本語を入力したなら、
+.JA	     データベースに入力された値は永久的にデータを失っている。
+.JA	     もし可能ならUTF-8をデータベースの内部補間に使うべきである。
