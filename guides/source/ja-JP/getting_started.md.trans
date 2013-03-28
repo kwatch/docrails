@@ -1,6 +1,6 @@
 .EN	Getting Started with Rails
 .EN	==========================
-.JA	Getting Started with Rails
+.JA	Rails入門 - Getting Started with Rails
 .JA	==========================
 
 .EN	This guide covers getting up and running with Ruby on Rails.
@@ -25,7 +25,7 @@
 
 .EN	Guide Assumptions
 .EN	-----------------
-.JA	Guide Assumptions
+.JA	ガイドの前提 - Guide Assumptions
 .JA	-----------------
 
 .EN	This guide is designed for beginners who want to get started with a Rails
@@ -64,7 +64,7 @@
 
 .EN	What is Rails?
 .EN	--------------
-.JA	What is Rails?
+.JA	Railsとは? - What is Rails?
 .JA	--------------
 
 .EN	Rails is a web application development framework written in the Ruby language.
@@ -105,7 +105,7 @@
 
 .EN	Creating a New Rails Project
 .EN	----------------------------
-.JA	Creating a New Rails Project
+.JA	新しいRailsプロジェクトの作成 - Creating a New Rails Project
 .JA	----------------------------
 
 .EN	The best way to use this guide is to follow each step as it happens, no code or
@@ -134,7 +134,7 @@
 .JA	プロンプトは'c:\source_code>'のように見えるでしょう。
 
 .EN	### Installing Rails
-.JA	### Installing Rails
+.JA	### Railsのインストール - Installing Rails
 
 .EN	Open up a command line prompt. On Mac OS X open Terminal.app, on Windows choose
 .EN	"Run" from your Start menu and type 'cmd.exe'. Any commands prefaced with a
@@ -185,7 +185,7 @@
 .JA	もし"Rails 3.2.9"のように表示されれば、次へ進む準備が整いました。
 
 .EN	### Creating the Blog Application
-.JA	### Creating the Blog Application
+.JA	### ブログアプリケーションの作成 - Creating the Blog Application
 
 .EN	Rails comes with a number of scripts called generators that are designed to make your development life easier by creating everything that's necessary to start working on a particular task. One of these is the new application generator, which will provide you with the foundation of a fresh Rails application so that you don't have to write it yourself.
 .JA	Railsにはgeneratorsと呼ばれる幾つかのスクリプトが組み込まれています。generatorsは特定の作業を開始するために必要な全てのものを作成することで、あなたの開発作業を簡単にするように設計されています。 このスクリプトの一つが新しいアプリケーションの生成であり、新期のRailsアプリケーションの基礎を提供するので、あなた自身でコーディングをする必要はまったくありません。
@@ -262,14 +262,14 @@
 
 .EN	Hello, Rails!
 .EN	-------------
-.JA	Hello, Rails!
+.JA	 - Hello, Rails!
 .JA	-------------
 
 .EN	To begin with, let's get some text up on screen quickly. To do this, you need to get your Rails application server running.
 .JA	まず手始めに画面にいくつか文字を出力してみる。  ここで、Railsアプリケーションのサーバーを動かしている必要がある。
 
 .EN	### Starting up the Web Server
-.JA	### Starting up the Web Server
+.JA	### Webサーバーの起動 - Starting up the Web Server
 
 .EN	You actually have a functional Rails application already. To see it, you need to start a web server on your development machine. You can do this by running:
 .JA	実際にRailsアプリケーションの機能を既に持っている。 これを見て、開発マシンでwebサーバーが起動する事が必要。 下記で実行ができる:
@@ -297,7 +297,7 @@
 .JA	"Welcome Aboard"ページは新しいRailsアプリケーションによる_smokeとtest_のテストです : これは、ページを作成するのに各ソフトウェアが十分に正しく設定されていることを確認します。 _Aboutをクリックし、アプリケーションのenvironment_リンクはアプリケーションの環境概要を表示します。
 
 .EN	### Say "Hello", Rails
-.JA	### Say "Hello", Rails
+.JA	### "Hello"、 Railsと言わせる - Say "Hello", Rails
 
 .EN	To get Rails saying "Hello", you need to create at minimum a _controller_ and a _view_.
 .JA	Railsに"Hello"と言わせるには、最低限_controller_と_view_を作成する必要がある。
@@ -372,7 +372,7 @@
 .JA	```
 
 .EN	### Setting the Application Home Page
-.JA	### Setting the Application Home Page
+.JA	### ホームページの設定 - Setting the Application Home Page
 
 .EN	Now that we have made the controller and view, we need to tell Rails when we want Hello Rails! to show up. In our case, we want it to show up when we navigate to the root URL of our site, <http://localhost:3000>. At the moment, "Welcome Aboard" is occupying that spot.
 .JA	今のでcontrollerとviewは完成した。あとはRailsにHello Railsの表示を要求する 。 この場合、作ったサイトのルートURLに対して支持を出せば表示される、<http://localhost:3000>。 すぐに"Welcome Aboard"が表示される。
@@ -424,7 +424,7 @@
 
 .EN	Getting Up and Running
 .EN	----------------------
-.JA	Getting Up and Running
+.JA	 - Getting Up and Running
 .JA	----------------------
 
 .EN	Now that you've seen how to create a controller, an action and a view, let's create something with a bit more substance.
@@ -443,7 +443,7 @@
 .JA	今のところ少しの基本であるが、それでも大丈夫。 後々改善していくやり方であることがわかると思います。
 
 .EN	### Laying down the ground work
-.JA	### Laying down the ground work
+.JA	### 基礎固め - Laying down the ground work
 
 .EN	The first thing that you are going to need to create a new post within the application is a place to do that. A great place for that would be at `/posts/new`. If you attempt to navigate to that now — by visiting <http://localhost:3000/posts/new> — Rails will give you a routing error:
 .JA	始めにアプリケーション内で新しい投稿の作成をする場所が必要です。 それにふさわしいのは`/posts/new`になります。 もしブラウザで<http://localhost:3000/posts/new>に訪れた場合、Railsはルーティングエラーを返すでしょう。
@@ -567,7 +567,7 @@
 .JA	<http://localhost:3000/posts/new>を再読み込みするとページのタイトルに記述した内容を見ることが出来ます。 ルート、コントローラー、アクション、ビューが調和していることがわかります。 新しい投稿のためのフォームを作成します。
 
 .EN	### The first form
-.JA	### The first form
+.JA	### 最初のフォーム - The first form
 
 .EN	To create a form within this template, you will use a <em>form
 .EN	builder</em>. The primary form builder for Rails is provided by a helper
@@ -666,7 +666,7 @@
 .JA	この動作ををさせるためには`PostsController`内に`create`アクションを作成する必要がある。
 
 .EN	### Creating posts
-.JA	### Creating posts
+.JA	### 投稿の作成 - Creating posts
 
 .EN	To make the "Unknown action" go away, you can define a `create` action within the `PostsController` class in `app/controllers/posts_controller.rb`, underneath the `new` action:
 .JA	"不明なアクション"をなくすには`app/controllers/posts_controller.rb`の`PostsController`クラス内で、`new`アクションの下部に`create`を定義することができる:
@@ -723,7 +723,7 @@
 .JA	このアクションはフォームから送られてきた投稿のためのパラメータを表示しています。 しかし、これは全く役に立ちません。 パラメータを見ることは可能ですが、それについて何かできるということではありません。
 
 .EN	### Creating the Post model
-.JA	### Creating the Post model
+.JA	### Postモデルの作成 - Creating the Post model
 
 .EN	Models in Rails use a singular name, and their corresponding database tables use
 .EN	a plural name. Rails provides a generator for creating models, which
@@ -770,7 +770,7 @@
 .JA	宣言する必要がないことを意味します。
 
 .EN	### Running a Migration
-.JA	### Running a Migration
+.JA	### Migrationの実行 - Running a Migration
 
 .EN	As we've just seen, `rails generate model` created a _database
 .EN	migration_ file inside the `db/migrate` directory.
@@ -874,7 +874,7 @@
 .JA	本番環境であることを明示的に指定する必要があります:'rake db:migrate RAILS_ENV=production'
 
 .EN	### Saving data in the controller
-.JA	### Saving data in the controller
+.JA	### コントローラーへのデータの保存 - Saving data in the controller
 
 .EN	Back in `posts_controller`, we need to change the `create` action
 .EN	to use the new `Post` model to save the data in the database. Open `app/controllers/posts_controller.rb`
@@ -920,7 +920,7 @@
 .JA	ブール値を返します。
 
 .EN	### Showing Posts
-.JA	### Showing Posts
+.JA	### 投稿の表示 - Showing Posts
 
 .EN	If you submit the form again now, Rails will complain about not finding
 .EN	the `show` action. That's not very useful though, so let's add the
@@ -1008,7 +1008,7 @@
 .JA	![Show action for posts](images/getting_started/show_action_for_posts.png)
 
 .EN	### Listing all posts
-.JA	### Listing all posts
+.JA	### 全ての投稿を見る - Listing all posts
 
 .EN	We still need a way to list all our posts, so let's do that. As usual,
 .EN	we'll need a route placed into `config/routes.rb`:
@@ -1076,7 +1076,7 @@
 .JA	`http://localhost:3000/posts`へアクセスすると、作成した投稿のリストが表示されることが確認できます。
 
 .EN	### Adding links
-.JA	### Adding links
+.JA	### リンクの追加 - Adding links
 
 .EN	You can now create, show, and list posts. Now let's add some links to
 .EN	navigate through pages.
@@ -1172,7 +1172,7 @@
 .JA	変更を反映するためにWebサーバーを再起動する必要はありません。
 
 .EN	### Allowing the update of fields
-.JA	### Allowing the update of fields
+.JA	### フィールドの更新許可 - Allowing the update of fields
 
 .EN	The model file, `app/models/post.rb` is about as simple as it can get:
 .JA	参考になるファイルとして`app/models/post.rb`を見るのが簡単です。
@@ -1198,7 +1198,7 @@
 .JA	いろいろな機能を提供している。
 
 .EN	### Adding Some Validation
-.JA	### Adding Some Validation
+.JA	### 検証の追加 - Adding Some Validation
 
 .EN	Rails includes methods to help you validate the data that you send to models.
 .EN	Open the `app/models/post.rb` file and edit it:
@@ -1385,7 +1385,7 @@
 .JA	![Form With Errors](images/getting_started/form_with_errors.png)
 
 .EN	### Updating Posts
-.JA	### Updating Posts
+.JA	### 投稿の更新 - Updating Posts
 
 .EN	We've covered the "CR" part of CRUD. Now let's focus on the "U" part, updating posts.
 .JA	CRUDの"CR"の範囲を扱います。 更新投稿の#U#の部分にフォーカスを当てましょう。
@@ -1628,7 +1628,7 @@
 .JA	![Index action with edit link](images/getting_started/index_action_with_edit_link.png)
 
 .EN	### Using partials to clean up duplication in views
-.JA	### Using partials to clean up duplication in views
+.JA	### ビュー内で複製を除去する部分的な使用 - Using partials to clean up duplication in views
 
 .EN	Our `edit` page looks very similar to the `new` page, in fact they
 .EN	both share the same code for displaying the form. Let's remove some duplication
@@ -1833,7 +1833,7 @@
 .JA	ルーティングメソッドが利用可能である。
 
 .EN	### Deleting Posts
-.JA	### Deleting Posts
+.JA	### 投稿の削除 - Deleting Posts
 
 .EN	We're now ready to cover the "D" part of CRUD, deleting posts from the
 .EN	database. Following the REST convention, we're going to add a route for
@@ -1976,7 +1976,7 @@
 .JA	より良くしていくことができるのか見せたいと思います。
 
 .EN	### Going Deeper into REST
-.JA	### Going Deeper into REST
+.JA	### RESTの深みへ - Going Deeper into REST
 
 .EN	We've now covered all the CRUD actions of a REST app. We did so by
 .EN	declaring separate routes with the appropriate verbs into
@@ -2072,7 +2072,7 @@
 
 .EN	Adding a Second Model
 .EN	---------------------
-.JA	Adding a Second Model
+.JA	第2のモデルの追加 - Adding a Second Model
 .JA	---------------------
 
 .EN	It's time to add a second model to the application. The second model will handle comments on
@@ -2081,7 +2081,7 @@
 .JA	第2のモデルは投稿に対するコメントを処理します。
 
 .EN	### Generating a Model
-.JA	### Generating a Model
+.JA	### モデルの作成 - Generating a Model
 
 .EN	We're going to see the same generator that we used before when creating
 .EN	the `Post` model. This time we'll create a `Comment` model to hold
@@ -2205,7 +2205,7 @@
 .JA	```
 
 .EN	### Associating Models
-.JA	### Associating Models
+.JA	### 関係モデル - Associating Models
 
 .EN	Active Record associations let you easily declare the relationship between two
 .EN	models. In the case of comments and posts, you could write out the relationships
@@ -2270,7 +2270,7 @@
 .JA	[Active Record Associations](association_basics.html)。
 
 .EN	### Adding a Route for Comments
-.JA	### Adding a Route for Comments
+.JA	### コメントに関するルートの追加 - Adding a Route for Comments
 
 .EN	As with the `welcome` controller, we will need to add a route so that Rails knows
 .EN	where we would like to navigate to see `comments`. Open up the
@@ -2301,7 +2301,7 @@
 .JA	TIP: ルーティングに関するより詳細な情報は次のガイドを見てください[Rails Routing](routing.html)
 
 .EN	### Generating a Controller
-.JA	### Generating a Controller
+.JA	### コントローラーの作成 - Generating a Controller
 
 .EN	With the model in hand, you can turn your attention to creating a matching
 .EN	controller. Again, we'll use the same generator we used before:
@@ -2557,7 +2557,7 @@
 
 .EN	Refactoring
 .EN	-----------
-.JA	Refactoring
+.JA	リファクタリング - Refactoring
 .JA	-----------
 
 .EN	Now that we have posts and comments working, take a look at the
@@ -2568,7 +2568,7 @@
 .JA	それをきれいにすることが出来ます。
 
 .EN	### Rendering Partial Collections
-.JA	### Rendering Partial Collections
+.JA	### コレクションの一部をレンダリングする - Rendering Partial Collections
 
 .EN	First, we will make a comment partial to extract showing all the comments for the
 .EN	post. Create the file `app/views/comments/_comment.html.erb` and put the
@@ -2677,7 +2677,7 @@
 .JA	この場合`comment`はその時私たちに見せる為に部分的な利用が可能である。
 
 .EN	### Rendering a Partial Form
-.JA	### Rendering a Partial Form
+.JA	### 部分的なフォームのレンダリング - Rendering a Partial Form
 
 .EN	Let us also move that new comment section out to its own partial. Again, you
 .EN	create a file `app/views/comments/_form.html.erb` containing:
@@ -2766,7 +2766,7 @@
 
 .EN	Deleting Comments
 .EN	-----------------
-.JA	Deleting Comments
+.JA	コメントの削除 - Deleting Comments
 .JA	-----------------
 
 .EN	Another important feature of a blog is being able to delete spam comments. To do
@@ -2866,7 +2866,7 @@
 
 
 .EN	### Deleting Associated Objects
-.JA	### Deleting Associated Objects
+.JA	### 関連するオブジェクトの削除 - Deleting Associated Objects
 
 .EN	If you delete a post then its associated comments will also need to be deleted.
 .EN	Otherwise they would simply occupy space in the database. Rails allows you to
@@ -2896,7 +2896,7 @@
 
 .EN	Security
 .EN	--------
-.JA	セキュリティ
+.JA	セキュリティ - Security
 .JA	--------
 
 .EN	If you were to publish your blog online, anybody would be able to add, edit and
@@ -2981,7 +2981,7 @@
 
 .EN	What's Next?
 .EN	------------
-.JA	What's Next?
+.JA	次は何をすればいい？ - What's Next?
 .JA	------------
 
 .EN	Now that you've seen your first Rails application, you should feel free to
@@ -3015,7 +3015,7 @@
 
 .EN	Configuration Gotchas
 .EN	---------------------
-.JA	Configuration Gotchas
+.JA	Configuration Gotchas - Configuration Gotchas
 .JA	---------------------
 
 .EN	The easiest way to work with Rails is to store all external data as UTF-8. If
