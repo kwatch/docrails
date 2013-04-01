@@ -1,4 +1,7 @@
 module ActiveRecord
+
+  # = Active Record Errors
+  #
   # Generic Active Record exception class.
   class ActiveRecordError < StandardError
   end
@@ -19,7 +22,7 @@ module ActiveRecord
   #   end
   #
   #   # Comments are not patches, this assignment raises AssociationTypeMismatch.
-  #   @ticket.patches << Comment.new(:content => "Please attach tests to your patch.")
+  #   @ticket.patches << Comment.new(content: "Please attach tests to your patch.")
   class AssociationTypeMismatch < ActiveRecordError
   end
 
@@ -27,7 +30,8 @@ module ActiveRecord
   class SerializationTypeMismatch < ActiveRecordError
   end
 
-  # Raised when adapter not specified on connection (or configuration file <tt>config/database.yml</tt> misses adapter field).
+  # Raised when adapter not specified on connection (or configuration file <tt>config/database.yml</tt>
+  # misses adapter field).
   class AdapterNotSpecified < ActiveRecordError
   end
 
@@ -35,7 +39,8 @@ module ActiveRecord
   class AdapterNotFound < ActiveRecordError
   end
 
-  # Raised when connection to the database could not been established (for example when <tt>connection=</tt> is given a nil object).
+  # Raised when connection to the database could not been established (for example when <tt>connection=</tt>
+  # is given a nil object).
   class ConnectionNotEstablished < ActiveRecordError
   end
 
@@ -48,7 +53,12 @@ module ActiveRecord
   class RecordNotSaved < ActiveRecordError
   end
 
-  # Raised when SQL statement cannot be executed by the database (for example, it's often the case for MySQL when Ruby driver used is too old).
+  # Raised by ActiveRecord::Base.destroy! when a call to destroy would return false.
+  class RecordNotDestroyed < ActiveRecordError
+  end
+
+  # Raised when SQL statement cannot be executed by the database (for example, it's often the case for
+  # MySQL when Ruby driver used is too old).
   class StatementInvalid < ActiveRecordError
   end
 
@@ -75,12 +85,13 @@ module ActiveRecord
   class InvalidForeignKey < WrappedDatabaseException
   end
 
-  # Raised when number of bind variables in statement given to <tt>:condition</tt> key (for example, when using +find+ method)
+  # Raised when number of bind variables in statement given to <tt>:condition</tt> key (for example,
+  # when using +find+ method)
   # does not match number of expected variables.
   #
   # For example, in
   #
-  #   Location.find :all, :conditions => ["lat = ? AND lng = ?", 53.7362]
+  #   Location.where("lat = ? AND lng = ?", 53.7362)
   #
   # two placeholders are given but only one variable to fill them.
   class PreparedStatementInvalid < ActiveRecordError
@@ -92,6 +103,14 @@ module ActiveRecord
   #
   # Read more about optimistic locking in ActiveRecord::Locking module RDoc.
   class StaleObjectError < ActiveRecordError
+    attr_reader :record, :attempted_action
+
+    def initialize(record, attempted_action)
+      super("Attempted to #{attempted_action} a stale object: #{record.class.name}")
+      @record = record
+      @attempted_action = attempted_action
+    end
+
   end
 
   # Raised when association is being configured improperly or
@@ -147,9 +166,9 @@ module ActiveRecord
   class AttributeAssignmentError < ActiveRecordError
     attr_reader :exception, :attribute
     def initialize(message, exception, attribute)
+      super(message)
       @exception = exception
       @attribute = attribute
-      @message = message
     end
   end
 
@@ -161,5 +180,33 @@ module ActiveRecord
     def initialize(errors)
       @errors = errors
     end
+  end
+
+  # Raised when a primary key is needed, but there is not one specified in the schema or model.
+  class UnknownPrimaryKey < ActiveRecordError
+    attr_reader :model
+
+    def initialize(model)
+      super("Unknown primary key for table #{model.table_name} in model #{model}.")
+      @model = model
+    end
+
+  end
+
+  # Raised when a relation cannot be mutated because it's already loaded.
+  #
+  #   class Task < ActiveRecord::Base
+  #   end
+  #
+  #   relation = Task.all
+  #   relation.loaded? # => true
+  #
+  #   # Methods which try to mutate a loaded relation fail.
+  #   relation.where!(title: 'TODO')  # => ActiveRecord::ImmutableRelation
+  #   relation.limit!(5)              # => ActiveRecord::ImmutableRelation
+  class ImmutableRelation < ActiveRecordError
+  end
+
+  class TransactionIsolationError < ActiveRecordError
   end
 end

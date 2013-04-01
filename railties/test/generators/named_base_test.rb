@@ -93,6 +93,30 @@ class NamedBaseTest < Rails::Generators::TestCase
     assert_name g, "application", :application_name
   end
 
+  def test_index_helper
+    g = generator ['Post']
+    assert_name g, 'posts', :index_helper
+  end
+
+  def test_index_helper_to_pluralize_once
+    g = generator ['Stadium']
+    assert_name g, 'stadia', :index_helper
+  end
+
+  def test_index_helper_with_uncountable
+    g = generator ['Sheep']
+    assert_name g, 'sheep_index', :index_helper
+  end
+
+  def test_hide_namespace
+    g = generator ['Hidden']
+    g.class.stubs(:namespace).returns('hidden')
+
+    assert !Rails::Generators.hidden_namespaces.include?('hidden')
+    g.class.hide!
+    assert Rails::Generators.hidden_namespaces.include?('hidden')
+  end
+
   protected
 
     def assert_name(generator, value, method)

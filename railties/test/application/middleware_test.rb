@@ -1,7 +1,7 @@
 require 'isolation/abstract_unit'
 
 module ApplicationTests
-  class MiddlewareTest < Test::Unit::TestCase
+  class MiddlewareTest < ActiveSupport::TestCase
     include ActiveSupport::Testing::Isolation
 
     def setup
@@ -10,22 +10,32 @@ module ApplicationTests
       FileUtils.rm_rf "#{app_path}/config/environments"
     end
 
+    def teardown
+      teardown_app
+    end
+
     def app
       @app ||= Rails.application
     end
 
     test "default middleware stack" do
+      add_to_config "config.action_dispatch.x_sendfile_header = 'X-Sendfile'"
+
       boot!
 
       assert_equal [
+        "Rack::Sendfile",
         "ActionDispatch::Static",
         "Rack::Lock",
         "ActiveSupport::Cache::Strategy::LocalCache",
         "Rack::Runtime",
-        "Rails::Rack::Logger",
+        "Rack::MethodOverride",
+        "ActionDispatch::RequestId",
+        "Rails::Rack::Logger", # must come after Rack::MethodOverride to properly log overridden methods
         "ActionDispatch::ShowExceptions",
+        "ActionDispatch::DebugExceptions",
         "ActionDispatch::RemoteIp",
-        "Rack::Sendfile",
+        "ActionDispatch::Reloader",
         "ActionDispatch::Callbacks",
         "ActiveRecord::ConnectionAdapters::ConnectionManagement",
         "ActiveRecord::QueryCache",
@@ -33,16 +43,57 @@ module ApplicationTests
         "ActionDispatch::Session::CookieStore",
         "ActionDispatch::Flash",
         "ActionDispatch::ParamsParser",
-        "Rack::MethodOverride",
-        "ActionDispatch::Head"
+        "Rack::Head",
+        "Rack::ConditionalGet",
+        "Rack::ETag"
       ], middleware
     end
 
-    test "removing activerecord omits its middleware" do
+    test "Rack::Sendfile is not included by default" do
+      boot!
+
+      assert !middleware.include?("Rack::Sendfile"), "Rack::Sendfile is not included in the default stack unless you set config.action_dispatch.x_sendfile_header"
+    end
+
+    test "Rack::Cache is not included by default" do
+      boot!
+
+      assert !middleware.include?("Rack::Cache"), "Rack::Cache is not included in the default stack unless you set config.action_dispatch.rack_cache"
+    end
+
+    test "Rack::Cache is present when action_dispatch.rack_cache is set" do
+      add_to_config "config.action_dispatch.rack_cache = true"
+
+      boot!
+
+      assert_equal "Rack::Cache", middleware.first
+    end
+
+    test "ActionDispatch::SSL is present when force_ssl is set" do
+      add_to_config "config.force_ssl = true"
+      boot!
+      assert middleware.include?("ActionDispatch::SSL")
+    end
+
+    test "ActionDispatch::SSL is configured with options when given" do
+      add_to_config "config.force_ssl = true"
+      add_to_config "config.ssl_options = { host: 'example.com' }"
+      boot!
+
+      assert_equal AppTemplate::Application.middleware.first.args, [{host: 'example.com'}]
+    end
+
+    test "removing Active Record omits its middleware" do
       use_frameworks []
       boot!
       assert !middleware.include?("ActiveRecord::ConnectionAdapters::ConnectionManagement")
       assert !middleware.include?("ActiveRecord::QueryCache")
+    end
+
+    test "removes lock if cache classes is set" do
+      add_to_config "config.cache_classes = true"
+      boot!
+      assert !middleware.include?("Rack::Lock")
     end
 
     test "removes lock if allow concurrency is set" do
@@ -57,10 +108,23 @@ module ApplicationTests
       assert !middleware.include?("ActionDispatch::Static")
     end
 
-    test "removes show exceptions if action_dispatch.show_exceptions is disabled" do
+    test "can delete a middleware from the stack" do
+      add_to_config "config.middleware.delete ActionDispatch::Static"
+      boot!
+      assert !middleware.include?("ActionDispatch::Static")
+    end
+
+    test "includes exceptions middlewares even if action_dispatch.show_exceptions is disabled" do
       add_to_config "config.action_dispatch.show_exceptions = false"
       boot!
-      assert !middleware.include?("ActionDispatch::ShowExceptions")
+      assert middleware.include?("ActionDispatch::ShowExceptions")
+      assert middleware.include?("ActionDispatch::DebugExceptions")
+    end
+
+    test "removes ActionDispatch::Reloader if cache_classes is true" do
+      add_to_config "config.cache_classes = true"
+      boot!
+      assert !middleware.include?("ActionDispatch::Reloader")
     end
 
     test "use middleware" do
@@ -76,91 +140,74 @@ module ApplicationTests
       assert_equal "Rack::Config", middleware.second
     end
 
+    test "Rails.cache does not respond to middleware" do
+      add_to_config "config.cache_store = :memory_store"
+      boot!
+      assert_equal "Rack::Runtime", middleware.third
+    end
+
+    test "Rails.cache does respond to middleware" do
+      boot!
+      assert_equal "Rack::Runtime", middleware.fourth
+    end
+
     test "insert middleware before" do
       add_to_config "config.middleware.insert_before ActionDispatch::Static, Rack::Config"
       boot!
       assert_equal "Rack::Config", middleware.first
     end
 
-    test "shows cascade if any metal exists" do
-      app_file "app/metal/foo.rb", "class Foo; end"
+    test "can't change middleware after it's built" do
       boot!
-      assert middleware.include?("ActionDispatch::Cascade")
+      assert_raise RuntimeError do
+        app.config.middleware.use Rack::Config
+      end
     end
 
-    # x_sendfile_header middleware
-    test "config.action_dispatch.x_sendfile_header defaults to ''" do
+    # ConditionalGet + Etag
+    test "conditional get + etag middlewares handle http caching based on body" do
       make_basic_app
 
       class ::OmgController < ActionController::Base
         def index
-          send_file __FILE__
+          if params[:nothing]
+            render text: ""
+          else
+            render text: "OMG"
+          end
         end
       end
 
-      get "/"
-      assert_equal File.read(__FILE__), last_response.body
-    end
-
-    test "config.action_dispatch.x_sendfile_header can be set" do
-      make_basic_app do |app|
-        app.config.action_dispatch.x_sendfile_header = "X-Sendfile"
-      end
-
-      class ::OmgController < ActionController::Base
-        def index
-          send_file __FILE__
-        end
-      end
+      etag = "5af83e3196bf99f440f31f2e1a6c9afe".inspect
 
       get "/"
-      assert_equal File.expand_path(__FILE__), last_response.headers["X-Sendfile"]
+      assert_equal 200, last_response.status
+      assert_equal "OMG", last_response.body
+      assert_equal "text/html; charset=utf-8", last_response.headers["Content-Type"]
+      assert_equal "max-age=0, private, must-revalidate", last_response.headers["Cache-Control"]
+      assert_equal etag, last_response.headers["Etag"]
+
+      get "/", {}, "HTTP_IF_NONE_MATCH" => etag
+      assert_equal 304, last_response.status
+      assert_equal "", last_response.body
+      assert_equal nil, last_response.headers["Content-Type"]
+      assert_equal "max-age=0, private, must-revalidate", last_response.headers["Cache-Control"]
+      assert_equal etag, last_response.headers["Etag"]
+
+      get "/?nothing=true"
+      assert_equal 200, last_response.status
+      assert_equal "", last_response.body
+      assert_equal "text/html; charset=utf-8", last_response.headers["Content-Type"]
+      assert_equal "no-cache", last_response.headers["Cache-Control"]
+      assert_equal nil, last_response.headers["Etag"]
     end
 
-    test "config.action_dispatch.x_sendfile_header is sent to Rack::Sendfile" do
-      make_basic_app do |app|
-        app.config.action_dispatch.x_sendfile_header = 'X-Lighttpd-Send-File'
-      end
+    test "ORIGINAL_FULLPATH is passed to env" do
+      boot!
+      env = ::Rack::MockRequest.env_for("/foo/?something")
+      Rails.application.call(env)
 
-      class ::OmgController < ActionController::Base
-        def index
-          send_file __FILE__
-        end
-      end
-
-      get "/"
-      assert_equal File.expand_path(__FILE__), last_response.headers["X-Lighttpd-Send-File"]
-    end
-
-    # remote_ip tests
-    test "remote_ip works" do
-      make_basic_app
-      assert_equal "1.1.1.1", remote_ip("REMOTE_ADDR" => "1.1.1.1")
-    end
-
-    test "checks IP spoofing by default" do
-      make_basic_app
-      assert_raises(ActionDispatch::RemoteIp::IpSpoofAttackError) do
-        remote_ip("HTTP_X_FORWARDED_FOR" => "1.1.1.1", "HTTP_CLIENT_IP" => "1.1.1.2")
-      end
-    end
-
-    test "can disable IP spoofing check" do
-      make_basic_app do |app|
-        app.config.action_dispatch.ip_spoofing_check = false
-      end
-
-      assert_nothing_raised(ActionDispatch::RemoteIp::IpSpoofAttackError) do
-        assert_equal "1.1.1.2", remote_ip("HTTP_X_FORWARDED_FOR" => "1.1.1.1", "HTTP_CLIENT_IP" => "1.1.1.2")
-      end
-    end
-
-    test "the user can set trusted proxies" do
-      make_basic_app do |app|
-        app.config.action_dispatch.trusted_proxies = /^4\.2\.42\.42$/
-      end
-
-      assert_equal "1.1.1.1", remote_ip("REMOTE_ADDR" => "4.2.42.42,1.1.1.1")
+      assert_equal "/foo/?something", env["ORIGINAL_FULLPATH"]
     end
 
     private
@@ -170,20 +217,7 @@ module ApplicationTests
       end
 
       def middleware
-        AppTemplate::Application.middleware.active.map(&:klass).map(&:name)
-      end
-
-      def remote_ip(env = {})
-        remote_ip = nil
-        env = Rack::MockRequest.env_for("/").merge(env).merge('action_dispatch.show_exceptions' => false)
-
-        endpoint = Proc.new do |e|
-          remote_ip = ActionDispatch::Request.new(e).remote_ip
-          [200, {}, ["Hello"]]
-        end
-
-        Rails.application.middleware.build(endpoint).call(env)
-        remote_ip
+        AppTemplate::Application.middleware.map(&:klass).map(&:name)
       end
   end
 end

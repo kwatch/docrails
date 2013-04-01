@@ -1,16 +1,18 @@
 require 'set'
 
-# Adds easy defaults to writing Atom feeds with the Builder template engine (this does not work on ERb or any other
-# template languages).
 module ActionView
-  module Helpers #:nodoc:
+  # = Action View Atom Feed Helpers
+  module Helpers
     module AtomFeedHelper
+      # Adds easy defaults to writing Atom feeds with the Builder template engine (this does not work on ERB or any other
+      # template languages).
+      #
       # Full usage example:
       #
       #   config/routes.rb:
-      #     Basecamp::Application.routes.draw do |map|
+      #     Basecamp::Application.routes.draw do
       #       resources :posts
-      #       root :to => "posts#index"
+      #       root to: "posts#index"
       #     end
       #
       #   app/controllers/posts_controller.rb:
@@ -18,7 +20,7 @@ module ActionView
       #       # GET /posts.html
       #       # GET /posts.atom
       #       def index
-      #         @posts = Post.find(:all)
+      #         @posts = Post.all
       #
       #         respond_to do |format|
       #           format.html
@@ -30,12 +32,12 @@ module ActionView
       #   app/views/posts/index.atom.builder:
       #     atom_feed do |feed|
       #       feed.title("My great blog!")
-      #       feed.updated(@posts.first.created_at)
+      #       feed.updated(@posts[0].created_at) if @posts.length > 0
       #
-      #       for post in @posts
+      #       @posts.each do |post|
       #         feed.entry(post) do |entry|
       #           entry.title(post.title)
-      #           entry.content(post.body, :type => 'html')
+      #           entry.content(post.body, type: 'html')
       #
       #           entry.author do |author|
       #             author.name("DHH")
@@ -49,7 +51,7 @@ module ActionView
       # * <tt>:language</tt>: Defaults to "en-US".
       # * <tt>:root_url</tt>: The HTML alternative that this feed is doubling for. Defaults to / on the current host.
       # * <tt>:url</tt>: The URL for this feed. Defaults to the current URL.
-      # * <tt>:id</tt>: The id for this feed. Defaults to "tag:#{request.host},#{options[:schema_date]}:#{request.request_uri.split(".")[0]}"
+      # * <tt>:id</tt>: The id for this feed. Defaults to "tag:#{request.host},#{options[:schema_date]}:#{request.fullpath.split(".")[0]}"
       # * <tt>:schema_date</tt>: The date at which the tag scheme for the feed was first used. A good default is the year you
       #   created the feed. See http://feedvalidator.org/docs/error/InvalidTAG.html for more information. If not specified,
       #   2005 is used (as an "I don't care" value).
@@ -64,10 +66,10 @@ module ActionView
       #       feed.updated((@posts.first.created_at))
       #       feed.tag!(openSearch:totalResults, 10)
       #
-      #       for post in @posts
+      #       @posts.each do |post|
       #         feed.entry(post) do |entry|
       #           entry.title(post.title)
-      #           entry.content(post.body, :type => 'html')
+      #           entry.content(post.body, type: 'html')
       #           entry.tag!('app:edited', Time.now)
       #
       #           entry.author do |author|
@@ -78,19 +80,19 @@ module ActionView
       #     end
       #
       # The Atom spec defines five elements (content rights title subtitle
-      # summary) which may directly contain xhtml content if :type => 'xhtml'
-      # is specified as an attribute.  If so, this helper will take care of
-      # the enclosing div and xhtml namespace declaration.  Example usage:
+      # summary) which may directly contain xhtml content if type: 'xhtml'
+      # is specified as an attribute. If so, this helper will take care of
+      # the enclosing div and xhtml namespace declaration. Example usage:
       #
-      #    entry.summary :type => 'xhtml' do |xhtml|
+      #    entry.summary type: 'xhtml' do |xhtml|
       #      xhtml.p pluralize(order.line_items.count, "line item")
       #      xhtml.p "Shipped to #{order.address}"
       #      xhtml.p "Paid by #{order.pay_type}"
       #    end
       #
       #
-      # atom_feed yields an AtomFeedBuilder instance.  Nested elements yield
-      # an AtomBuilder instance.
+      # <tt>atom_feed</tt> yields an +AtomFeedBuilder+ instance. Nested elements yield
+      # an +AtomBuilder+ instance.
       def atom_feed(options = {}, &block)
         if options[:schema_date]
           options[:schema_date] = options[:schema_date].strftime("%Y-%m-%d") if options[:schema_date].respond_to?(:strftime)
@@ -122,7 +124,7 @@ module ActionView
         end
       end
 
-      class AtomBuilder
+      class AtomBuilder #:nodoc:
         XHTML_TAG_NAMES = %w(content rights title subtitle summary).to_set
 
         def initialize(xml)
@@ -147,7 +149,7 @@ module ActionView
 
           # True if the method name matches one of the five elements defined
           # in the Atom spec as potentially containing XHTML content and
-          # if :type => 'xhtml' is, in fact, specified.
+          # if type: 'xhtml' is, in fact, specified.
           def xhtml_block?(method, arguments)
             if XHTML_TAG_NAMES.include?(method.to_s)
               last = arguments.last
@@ -156,7 +158,7 @@ module ActionView
           end
       end
 
-      class AtomFeedBuilder < AtomBuilder
+      class AtomFeedBuilder < AtomBuilder #:nodoc:
         def initialize(xml, view, feed_options = {})
           @xml, @view, @feed_options = xml, view, feed_options
         end
@@ -174,6 +176,7 @@ module ActionView
         # * <tt>:updated</tt>: Time of update. Defaults to the updated_at attribute on the record if one such exists.
         # * <tt>:url</tt>: The URL for this entry. Defaults to the polymorphic_url for the record.
         # * <tt>:id</tt>: The ID for this entry. Defaults to "tag:#{@view.request.host},#{@feed_options[:schema_date]}:#{record.class}/#{record.id}"
+        # * <tt>:type</tt>: The TYPE for this entry. Defaults to "text/html".
         def entry(record, options = {})
           @xml.entry do
             @xml.id(options[:id] || "tag:#{@view.request.host},#{@feed_options[:schema_date]}:#{record.class}/#{record.id}")
@@ -186,7 +189,9 @@ module ActionView
               @xml.updated((options[:updated] || record.updated_at).xmlschema)
             end
 
-            @xml.link(:rel => 'alternate', :type => 'text/html', :href => options[:url] || @view.polymorphic_url(record))
+            type = options.fetch(:type, 'text/html')
+
+            @xml.link(:rel => 'alternate', :type => type, :href => options[:url] || @view.polymorphic_url(record))
 
             yield AtomBuilder.new(@xml)
           end

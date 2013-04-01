@@ -1,13 +1,16 @@
 require 'models/topic'
 
 class Reply < Topic
-  scope :base
-
   belongs_to :topic, :foreign_key => "parent_id", :counter_cache => true
   belongs_to :topic_with_primary_key, :class_name => "Topic", :primary_key => "title", :foreign_key => "parent_title", :counter_cache => "replies_count"
   has_many :replies, :class_name => "SillyReply", :dependent => :destroy, :foreign_key => "parent_id"
+end
 
-  attr_accessible :title, :author_name, :author_email_address, :written_on, :content, :last_read, :parent_title
+class UniqueReply < Reply
+  validates_uniqueness_of :content, :scope => 'parent_id'
+end
+
+class SillyUniqueReply < UniqueReply
 end
 
 class WrongReply < Reply
@@ -17,7 +20,7 @@ class WrongReply < Reply
   validate :check_empty_title
   validate :check_content_mismatch, :on => :create
   validate :check_wrong_update, :on => :update
-  validate :check_title_is_secret, :on => :special_case
+  validate :check_author_name_is_secret, :on => :special_case
 
   def check_empty_title
     errors[:title] << "Empty" unless attribute_present?("title")
@@ -41,8 +44,8 @@ class WrongReply < Reply
     errors[:title] << "is Wrong Update" if attribute_present?("title") && title == "Wrong Update"
   end
 
-  def check_title_is_secret
-    errors[:title] << "Invalid" unless title == "secret"
+  def check_author_name_is_secret
+    errors[:author_name] << "Invalid" unless author_name == "secret"
   end
 end
 

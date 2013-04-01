@@ -16,7 +16,7 @@ class ScrollsController < ActionController::Base
           feed.title("My great blog!")
           feed.updated((@scrolls.first.created_at))
 
-          for scroll in @scrolls
+          @scrolls.each do |scroll|
             feed.entry(scroll) do |entry|
               entry.title(scroll.title)
               entry.content(scroll.body, :type => 'html')
@@ -33,8 +33,25 @@ class ScrollsController < ActionController::Base
           feed.title("My great blog!")
           feed.updated((@scrolls.first.created_at))
 
-          for scroll in @scrolls
+          @scrolls.each do |scroll|
             feed.entry(scroll, :url => "/otherstuff/" + scroll.to_param.to_s, :updated => Time.utc(2007, 1, scroll.id)) do |entry|
+              entry.title(scroll.title)
+              entry.content(scroll.body, :type => 'html')
+
+              entry.author do |author|
+                author.name("DHH")
+              end
+            end
+          end
+        end
+    EOT
+    FEEDS["entry_type_options"] = <<-EOT
+        atom_feed(:schema_date => '2008') do |feed|
+          feed.title("My great blog!")
+          feed.updated((@scrolls.first.created_at))
+
+          @scrolls.each do |scroll|
+            feed.entry(scroll, :type => 'text/xml') do |entry|
               entry.title(scroll.title)
               entry.content(scroll.body, :type => 'html')
 
@@ -54,7 +71,7 @@ class ScrollsController < ActionController::Base
             author.name("DHH")
           end
 
-          for scroll in @scrolls
+          @scrolls.each do |scroll|
             feed.entry(scroll, :url => "/otherstuff/" + scroll.to_param.to_s, :updated => Time.utc(2007, 1, scroll.id)) do |entry|
               entry.title(scroll.title)
               entry.content(scroll.body, :type => 'html')
@@ -68,7 +85,7 @@ class ScrollsController < ActionController::Base
           feed.title("My great blog!")
           feed.updated((@scrolls.first.created_at))
 
-          for scroll in @scrolls
+          @scrolls.each do |scroll|
             feed.entry(scroll) do |entry|
               entry.title(scroll.title)
               entry.content(scroll.body, :type => 'html')
@@ -86,7 +103,7 @@ class ScrollsController < ActionController::Base
           feed.title("My great blog!")
           feed.updated((@scrolls.first.created_at))
 
-          for scroll in @scrolls
+          @scrolls.each do |scroll|
             feed.entry(scroll, :id => "tag:test.rubyonrails.org,2008:"+scroll.id.to_s) do |entry|
               entry.title(scroll.title)
               entry.content(scroll.body, :type => 'html')
@@ -105,7 +122,7 @@ class ScrollsController < ActionController::Base
           feed.title("My great blog!")
           feed.updated((@scrolls.first.created_at))
 
-          for scroll in @scrolls
+          @scrolls.each do |scroll|
             feed.entry(scroll) do |entry|
               entry.title(scroll.title)
               entry.content(scroll.body, :type => 'html')
@@ -123,7 +140,7 @@ class ScrollsController < ActionController::Base
           feed.title("My great blog!")
           feed.updated((@scrolls.first.created_at))
 
-          for scroll in @scrolls
+          @scrolls.each do |scroll|
             feed.entry(scroll) do |entry|
               entry.title(scroll.title)
               entry.content(scroll.body, :type => 'html')
@@ -140,7 +157,7 @@ class ScrollsController < ActionController::Base
           feed.title("My great blog!")
           feed.updated((@scrolls.first.created_at))
 
-          for scroll in @scrolls
+          @scrolls.each do |scroll|
             feed.entry(scroll) do |entry|
               entry.title(scroll.title)
               entry.summary(:type => 'xhtml') do |xhtml|
@@ -165,7 +182,7 @@ class ScrollsController < ActionController::Base
             feed.title("My great blog!")
             feed.updated((@scrolls.first.created_at))
 
-            for scroll in @scrolls
+            @scrolls.each do |scroll|
               feed.entry(scroll) do |entry|
                 entry.title(scroll.title)
                 entry.content(scroll.body, :type => 'html')
@@ -185,11 +202,6 @@ class ScrollsController < ActionController::Base
 
     render :inline => FEEDS[params[:id]], :type => :builder
   end
-
-  protected
-    def rescue_action(e)
-      raise(e)
-    end
 end
 
 class AtomFeedTest < ActionController::TestCase
@@ -203,7 +215,7 @@ class AtomFeedTest < ActionController::TestCase
   def test_feed_should_use_default_language_if_none_is_given
     with_restful_routing(:scrolls) do
       get :index, :id => "defaults"
-      assert_match %r{xml:lang="en-US"}, @response.body
+      assert_match(%r{xml:lang="en-US"}, @response.body)
     end
   end
 
@@ -311,10 +323,24 @@ class AtomFeedTest < ActionController::TestCase
     end
   end
 
+  def test_feed_entry_type_option_default_to_text_html
+    with_restful_routing(:scrolls) do
+      get :index, :id => 'defaults'
+      assert_select "entry link[rel=alternate][type=text/html]"
+    end
+  end
+
+  def test_feed_entry_type_option_specified
+    with_restful_routing(:scrolls) do
+      get :index, :id => 'entry_type_options'
+      assert_select "entry link[rel=alternate][type=text/xml]"
+    end
+  end
+
   private
     def with_restful_routing(resources)
       with_routing do |set|
-        set.draw do |map|
+        set.draw do
           resources(resources)
         end
         yield

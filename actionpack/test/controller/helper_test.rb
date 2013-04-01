@@ -1,28 +1,63 @@
 require 'abstract_unit'
-require 'active_support/core_ext/kernel/reporting'
 
-ActionController::Base.helpers_path = [File.dirname(__FILE__) + '/../fixtures/helpers']
+ActionController::Base.helpers_path = File.expand_path('../../fixtures/helpers', __FILE__)
 
 module Fun
   class GamesController < ActionController::Base
     def render_hello_world
       render :inline => "hello: <%= stratego %>"
     end
-
-    def rescue_action(e) raise end
   end
 
   class PdfController < ActionController::Base
     def test
       render :inline => "test: <%= foobar %>"
     end
-
-    def rescue_action(e) raise end
   end
 end
 
 class AllHelpersController < ActionController::Base
   helper :all
+end
+
+module ImpressiveLibrary
+  extend ActiveSupport::Concern
+  included do
+    helper_method :useful_function
+  end
+
+  def useful_function() end
+end
+
+ActionController::Base.send :include, ImpressiveLibrary
+
+class JustMeController < ActionController::Base
+  clear_helpers
+
+  def flash
+    render :inline => "<h1><%= notice %></h1>"
+  end
+
+  def lib
+    render :inline => '<%= useful_function %>'
+  end
+end
+
+class MeTooController < JustMeController
+end
+
+class HelpersPathsController < ActionController::Base
+  paths = ["helpers2_pack", "helpers1_pack"].map do |path|
+    File.join(File.expand_path('../../fixtures', __FILE__), path)
+  end
+  $:.unshift(*paths)
+
+  self.helpers_path = paths
+  helper :all
+
+  def index
+    render :inline => "<%= conflicting_helper %>"
+  end
 end
 
 module LocalAbcHelper
@@ -31,11 +66,26 @@ module LocalAbcHelper
   def c() end
 end
 
+class HelperPathsTest < ActiveSupport::TestCase
+  def setup
+    @request    = ActionController::TestRequest.new
+    @response   = ActionController::TestResponse.new
+  end
+
+  def test_helpers_paths_priority
+    request  = ActionController::TestRequest.new
+    responses = HelpersPathsController.action(:index).call(request.env)
+
+    # helpers1_pack was given as a second path, so pack1_helper should be
+    # included as the second one
+    assert_equal "pack1", responses.last.body
+  end
+end
+
 class HelperTest < ActiveSupport::TestCase
   class TestController < ActionController::Base
     attr_accessor :delegate_attr
     def delegate_method() end
-    def rescue_action(e) raise end
   end
 
   def setup
@@ -50,8 +100,8 @@ class HelperTest < ActiveSupport::TestCase
     # Set default test helper.
     self.test_helper = LocalAbcHelper
   end
-  
-  def test_deprecated_helper
+
+  def test_helper
     assert_equal expected_helper_methods, missing_methods
     assert_nothing_raised { @controller_class.helper TestHelper }
     assert_equal [], missing_methods
@@ -59,100 +109,106 @@ class HelperTest < ActiveSupport::TestCase
 
   def test_helper_method
     assert_nothing_raised { @controller_class.helper_method :delegate_method }
-    assert master_helper_methods.include?('delegate_method')
+    assert master_helper_methods.include?(:delegate_method)
   end
 
   def test_helper_attr
     assert_nothing_raised { @controller_class.helper_attr :delegate_attr }
-    assert master_helper_methods.include?('delegate_attr')
-    assert master_helper_methods.include?('delegate_attr=')
+    assert master_helper_methods.include?(:delegate_attr)
+    assert master_helper_methods.include?(:delegate_attr=)
   end
 
   def call_controller(klass, action)
     request  = ActionController::TestRequest.new
-    klass.action(action).call(request.env)    
+    klass.action(action).call(request.env)
   end
 
   def test_helper_for_nested_controller
-    assert_equal 'hello: Iz guuut!', 
+    assert_equal 'hello: Iz guuut!',
       call_controller(Fun::GamesController, "render_hello_world").last.body
     # request  = ActionController::TestRequest.new
-    # 
+    #
     # resp = Fun::GamesController.action(:render_hello_world).call(request.env)
     # assert_equal 'hello: Iz guuut!', resp.last.body
   end
 
   def test_helper_for_acronym_controller
     assert_equal "test: baz", call_controller(Fun::PdfController, "test").last.body
-    # 
+    #
     # request  = ActionController::TestRequest.new
     # response = ActionController::TestResponse.new
     # request.action = 'test'
-    # 
+    #
     # assert_equal 'test: baz', Fun::PdfController.process(request, response).body
   end
 
+  def test_default_helpers_only
+    assert_equal [JustMeHelper], JustMeController._helpers.ancestors.reject(&:anonymous?)
+    assert_equal [MeTooHelper, JustMeHelper], MeTooController._helpers.ancestors.reject(&:anonymous?)
+  end
+
+  def test_base_helper_methods_after_clear_helpers
+    assert_nothing_raised do
+      call_controller(JustMeController, "flash")
+    end
+  end
+
+  def test_lib_helper_methods_after_clear_helpers
+    assert_nothing_raised do
+      call_controller(JustMeController, "lib")
+    end
+  end
+
   def test_all_helpers
-    methods = AllHelpersController._helpers.instance_methods.map {|m| m.to_s}
+    methods = AllHelpersController._helpers.instance_methods
 
     # abc_helper.rb
-    assert methods.include?('bare_a')
+    assert methods.include?(:bare_a)
 
     # fun/games_helper.rb
-    assert methods.include?('stratego')
+    assert methods.include?(:stratego)
 
     # fun/pdf_helper.rb
-    assert methods.include?('foobar')
+    assert methods.include?(:foobar)
   end
 
   def test_all_helpers_with_alternate_helper_dir
-    @controller_class.helpers_path = [File.dirname(__FILE__) + '/../fixtures/alternate_helpers']
+    @controller_class.helpers_path = File.expand_path('../../fixtures/alternate_helpers', __FILE__)
 
     # Reload helpers
     @controller_class._helpers = Module.new
     @controller_class.helper :all
 
     # helpers/abc_helper.rb should not be included
-    assert !master_helper_methods.include?('bare_a')
+    assert !master_helper_methods.include?(:bare_a)
 
     # alternate_helpers/foo_helper.rb
-    assert master_helper_methods.include?('baz')
+    assert master_helper_methods.include?(:baz)
   end
 
   def test_helper_proxy
-    methods = AllHelpersController.helpers.methods.map(&:to_s)
+    methods = AllHelpersController.helpers.methods
 
-    # ActionView
-    assert methods.include?('pluralize')
+    # Action View
+    assert methods.include?(:pluralize)
 
     # abc_helper.rb
-    assert methods.include?('bare_a')
+    assert methods.include?(:bare_a)
 
     # fun/games_helper.rb
-    assert methods.include?('stratego')
+    assert methods.include?(:stratego)
 
     # fun/pdf_helper.rb
-    assert methods.include?('foobar')
-  end
-
-  def test_deprecation
-    assert_deprecated do
-      ActionController::Base.helpers_dir = "some/foo/bar"
-    end
-    assert_deprecated do
-      assert_equal ["some/foo/bar"], ActionController::Base.helpers_dir
-    end
-  ensure
-    ActionController::Base.helpers_path = [File.dirname(__FILE__) + '/../fixtures/helpers']
+    assert methods.include?(:foobar)
   end
 
   private
     def expected_helper_methods
-      TestHelper.instance_methods.map {|m| m.to_s }
+      TestHelper.instance_methods
     end
 
     def master_helper_methods
-      @controller_class._helpers.instance_methods.map {|m| m.to_s }
+      @controller_class._helpers.instance_methods
     end
 
     def missing_methods
@@ -170,8 +226,6 @@ class IsolatedHelpersTest < ActiveSupport::TestCase
     def index
       render :inline => '<%= shout %>'
     end
-
-    def rescue_action(e) raise end
   end
 
   class B < A
@@ -192,7 +246,7 @@ class IsolatedHelpersTest < ActiveSupport::TestCase
 
   def call_controller(klass, action)
     request  = ActionController::TestRequest.new
-    klass.action(action).call(request.env)    
+    klass.action(action).call(request.env)
   end
 
   def setup

@@ -20,57 +20,57 @@ module Rails
     autoload :ResourceHelpers, 'rails/generators/resource_helpers'
     autoload :TestCase,        'rails/generators/test_case'
 
+    mattr_accessor :namespace
+
     DEFAULT_ALIASES = {
-      :rails => {
-        :actions => '-a',
-        :orm => '-o',
-        :resource_controller => '-c',
-        :scaffold_controller => '-c',
-        :stylesheets => '-y',
-        :template_engine => '-e',
-        :test_framework => '-t'
+      rails: {
+        actions: '-a',
+        orm: '-o',
+        javascripts: '-j',
+        javascript_engine: '-je',
+        resource_controller: '-c',
+        scaffold_controller: '-c',
+        stylesheets: '-y',
+        stylesheet_engine: '-se',
+        template_engine: '-e',
+        test_framework: '-t'
       },
 
-      :test_unit => {
-        :fixture_replacement => '-r',
-      },
-
-      :plugin => {
-        :generator => '-g',
-        :tasks => '-r'
+      test_unit: {
+        fixture_replacement: '-r',
       }
     }
 
     DEFAULT_OPTIONS = {
-      :rails => {
-        :force_plural => false,
-        :helper => true,
-        :orm => nil,
-        :integration_tool => nil,
-        :performance_tool => nil,
-        :resource_controller => :controller,
-        :scaffold_controller => :scaffold_controller,
-        :singleton => false,
-        :stylesheets => true,
-        :test_framework => nil,
-        :template_engine => :erb
-      },
-
-      :plugin => {
-        :generator => false,
-        :tasks => false
+      rails: {
+        assets: true,
+        force_plural: false,
+        helper: true,
+        integration_tool: nil,
+        javascripts: true,
+        javascript_engine: :js,
+        orm: false,
+        resource_controller: :controller,
+        resource_route: true,
+        scaffold_controller: :scaffold_controller,
+        stylesheets: true,
+        stylesheet_engine: :css,
+        test_framework: false,
+        template_engine: :erb
       }
     }
 
-    def self.configure!(config = Rails.application.config.generators) #:nodoc:
+    def self.configure!(config) #:nodoc:
       no_color! unless config.colorize_logging
       aliases.deep_merge! config.aliases
       options.deep_merge! config.options
       fallbacks.merge! config.fallbacks
       templates_path.concat config.templates
+      templates_path.uniq!
+      hide_namespaces(*config.hidden_namespaces)
     end
 
-    def self.templates_path
+    def self.templates_path #:nodoc:
       @templates_path ||= []
     end
 
@@ -94,7 +94,6 @@ module Rails
     # some of them are not available by adding a fallback:
     #
     #   Rails::Generators.fallbacks[:shoulda] = :test_unit
-    #
     def self.fallbacks
       @fallbacks ||= {}
     end
@@ -114,8 +113,6 @@ module Rails
     # Generators names must end with "_generator.rb". This is required because Rails
     # looks in load paths and loads the generator just before it's going to be used.
     #
-    # ==== Examples
-    #
     #   find_by_namespace :webrat, :rails, :integration
     #
     # Will search for the following generators:
@@ -124,7 +121,6 @@ module Rails
     #
     # Notice that "rails:generators:webrat" could be loaded as well, what
     # Rails looks for is the first and last parts of the namespace.
-    #
     def self.find_by_namespace(name, base=nil, context=nil) #:nodoc:
       lookups = []
       lookups << "#{base}:#{name}"    if base
@@ -140,10 +136,7 @@ module Rails
 
       lookup(lookups)
 
-      namespaces = subclasses.inject({}) do |hash, klass|
-        hash[klass.namespace] = klass
-        hash
-      end
+      namespaces = Hash[subclasses.map { |klass| [klass.namespace, klass] }]
 
       lookups.each do |namespace|
         klass = namespaces[namespace]
@@ -158,7 +151,7 @@ module Rails
     # commands.
     def self.invoke(namespace, args=ARGV, config={})
       names = namespace.to_s.split(':')
-      if klass = find_by_namespace(names.pop, names.shift)
+      if klass = find_by_namespace(names.pop, names.any? && names.join(':'))
         args << "--help" if args.empty? && klass.arguments.any? { |a| a.required? }
         klass.start(args, config)
       else
@@ -171,22 +164,27 @@ module Rails
         orm      = options[:rails][:orm]
         test     = options[:rails][:test_framework]
         template = options[:rails][:template_engine]
+        css      = options[:rails][:stylesheet_engine]
 
         [
           "rails",
+          "resource_route",
           "#{orm}:migration",
           "#{orm}:model",
-          "#{orm}:observer",
           "#{test}:controller",
           "#{test}:helper",
           "#{test}:integration",
           "#{test}:mailer",
           "#{test}:model",
-          "#{test}:observer",
           "#{test}:scaffold",
           "#{test}:view",
           "#{template}:controller",
-          "#{template}:scaffold"
+          "#{template}:scaffold",
+          "#{template}:mailer",
+          "#{css}:scaffold",
+          "#{css}:assets",
+          "css:assets",
+          "css:scaffold"
         ]
       end
     end
@@ -214,11 +212,11 @@ module Rails
       puts "Usage: rails #{command} GENERATOR [args] [options]"
       puts
       puts "General options:"
-      puts "  -h, [--help]     # Print generators options and usage"
+      puts "  -h, [--help]     # Print generator's options and usage"
       puts "  -p, [--pretend]  # Run but do not make any changes"
       puts "  -f, [--force]    # Overwrite files that already exist"
       puts "  -s, [--skip]     # Skip files that already exist"
-      puts "  -q, [--quiet]    # Supress status output"
+      puts "  -q, [--quiet]    # Suppress status output"
       puts
       puts "Please choose a generator below."
       puts
@@ -227,9 +225,10 @@ module Rails
       rails = groups.delete("rails")
       rails.map! { |n| n.sub(/^rails:/, '') }
       rails.delete("app")
+      rails.delete("plugin_new")
       print_list("rails", rails)
 
-      hidden_namespaces.each {|n| groups.delete(n.to_s) }
+      hidden_namespaces.each { |n| groups.delete(n.to_s) }
 
       groups.sort.each { |b, n| print_list(b, n) }
     end
@@ -271,7 +270,6 @@ module Rails
       # Receives namespaces in an array and tries to find matching generators
       # in the load path.
       def self.lookup(namespaces) #:nodoc:
-        load_generators_from_railties!
         paths = namespaces_to_paths(namespaces)
 
         paths.each do |raw_path|
@@ -283,9 +281,6 @@ module Rails
               return
             rescue LoadError => e
               raise unless e.message =~ /#{Regexp.escape(path)}$/
-            rescue NameError => e
-              raise unless e.message =~ /Rails::Generator([\s(::)]|$)/
-              warn "[WARNING] Could not load generator #{path.inspect} because it's a Rails 2.x generator, which is not supported anymore. Error: #{e.message}.\n#{e.backtrace.join("\n")}"
             rescue Exception => e
               warn "[WARNING] Could not load generator #{path.inspect}. Error: #{e.message}.\n#{e.backtrace.join("\n")}"
             end
@@ -295,24 +290,16 @@ module Rails
 
       # This will try to load any generator in the load path to show in help.
       def self.lookup! #:nodoc:
-        load_generators_from_railties!
-
         $LOAD_PATH.each do |base|
           Dir[File.join(base, "{rails/generators,generators}", "**", "*_generator.rb")].each do |path|
             begin
+              path = path.sub("#{base}/", "")
               require path
-            rescue Exception => e
+            rescue Exception
               # No problem
             end
           end
         end
-      end
-
-      # Allow generators to be loaded from custom paths.
-      def self.load_generators_from_railties! #:nodoc:
-        return if defined?(@generators_from_railties) || Rails.application.nil?
-        @generators_from_railties = true
-        Rails.application.load_generators
       end
 
       # Convert namespaces to paths by replacing ":" for "/" and adding
@@ -322,16 +309,11 @@ module Rails
         paths = []
         namespaces.each do |namespace|
           pieces = namespace.split(":")
-          paths << pieces.dup.push(pieces.last).join("/") unless pieces.uniq.size == 1
+          paths << pieces.dup.push(pieces.last).join("/")
           paths << pieces.join("/")
         end
         paths.uniq!
         paths
       end
-
   end
 end
-
-# If the application was already defined, configure generators,
-# otherwise you have to configure it by hand.
-Rails::Generators.configure! if Rails.respond_to?(:application) && Rails.application

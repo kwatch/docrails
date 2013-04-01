@@ -1,6 +1,4 @@
-require "active_support/core_ext/object/misc"
 require "cgi"
-require "active_support/core_ext/cgi"
 
 module Rails
   module Info
@@ -25,7 +23,7 @@ module Rails
       end
 
       def frameworks
-        %w( active_record action_pack active_resource action_mailer active_support )
+        %w( active_record action_pack action_mailer active_support )
       end
 
       def framework_version(framework)
@@ -48,7 +46,7 @@ module Rails
       alias inspect to_s
 
       def to_html
-        (table = '<table>').tap do
+        '<table>'.tap do |table|
           properties.each do |(name, value)|
             table << %(<tr><td class="name">#{CGI.escapeHTML(name.to_s)}</td>)
             formatted_value = if value.kind_of?(Array)
@@ -80,8 +78,12 @@ module Rails
       Rails::VERSION::STRING
     end
 
+    property 'JavaScript Runtime' do
+      ExecJS.runtime.name
+    end
+
     # Versions of each Rails framework (Active Record, Action Pack,
-    # Active Resource, Action Mailer, and Active Support).
+    # Action Mailer, and Active Support).
     frameworks.each do |framework|
       property "#{framework.titlecase} version" do
         framework_version(framework)
@@ -89,7 +91,7 @@ module Rails
     end
 
     property 'Middleware' do
-      Rails.configuration.middleware.active.map(&:inspect)
+      Rails.configuration.middleware.map(&:inspect)
     end
 
     # The application's location on the filesystem.

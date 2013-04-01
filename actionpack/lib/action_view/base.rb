@@ -1,28 +1,26 @@
 require 'active_support/core_ext/module/attr_internal'
-require 'active_support/core_ext/module/delegation'
-require 'active_support/core_ext/class/attribute'
-require 'active_support/core_ext/array/wrap'
+require 'active_support/core_ext/class/attribute_accessors'
+require 'active_support/ordered_options'
+require 'action_view/log_subscriber'
 
 module ActionView #:nodoc:
-  class NonConcattingString < ActiveSupport::SafeBuffer
-  end
-
-  # Action View templates can be written in three ways. If the template file has a <tt>.erb</tt> (or <tt>.rhtml</tt>) extension then it uses a mixture of ERb
-  # (included in Ruby) and HTML. If the template file has a <tt>.builder</tt> (or <tt>.rxml</tt>) extension then Jim Weirich's Builder::XmlMarkup library is used.
-  # If the template file has a <tt>.rjs</tt> extension then it will use ActionView::Helpers::PrototypeHelper::JavaScriptGenerator.
+  # = Action View Base
   #
-  # = ERb
+  # Action View templates can be written in several ways. If the template file has a <tt>.erb</tt> extension then it uses a mixture of ERB
+  # (included in Ruby) and HTML. If the template file has a <tt>.builder</tt> extension then Jim Weirich's Builder::XmlMarkup library is used.
   #
-  # You trigger ERb by using embeddings such as <% %>, <% -%>, and <%= %>. The <%= %> tag set is used when you want output. Consider the
+  # == ERB
+  #
+  # You trigger ERB by using embeddings such as <% %>, <% -%>, and <%= %>. The <%= %> tag set is used when you want output. Consider the
   # following loop for names:
   #
   #   <b>Names of all the people</b>
-  #   <% for person in @people %>
+  #   <% @people.each do |person| %>
   #     Name: <%= person.name %><br/>
   #   <% end %>
   #
   # The loop is setup in regular embedding tags <% %> and the name is written using the output embedding tag <%= %>. Note that this
-  # is not just a usage suggestion. Regular output functions like print or puts won't work with ERb templates. So this would be wrong:
+  # is not just a usage suggestion. Regular output functions like print or puts won't work with ERB templates. So this would be wrong:
   #
   #   <%# WRONG %>
   #   Hi, Mr. <% puts "Frodo" %>
@@ -31,7 +29,7 @@ module ActionView #:nodoc:
   #
   # <%- and -%> suppress leading and trailing whitespace, including the trailing newline, and can be used interchangeably with <% and %>.
   #
-  # == Using sub templates
+  # === Using sub templates
   #
   # Using sub templates allows you to sidestep tedious replication and extract common display structures in shared templates. The
   # classic example is the use of a header and footer (even though the Action Pack-way would be to use Layouts):
@@ -53,11 +51,11 @@ module ActionView #:nodoc:
   #
   #   <title><%= @page_title %></title>
   #
-  # == Passing local variables to sub templates
+  # === Passing local variables to sub templates
   #
   # You can pass local variables to sub templates by using a hash with the variable names as keys and the objects as values:
   #
-  #   <%= render "shared/header", { :headline => "Welcome", :person => person } %>
+  #   <%= render "shared/header", { headline: "Welcome", person: person } %>
   #
   # These can now be accessed in <tt>shared/header</tt> with:
   #
@@ -73,30 +71,30 @@ module ActionView #:nodoc:
   #
   # Testing using <tt>defined? headline</tt> will not work. This is an implementation restriction.
   #
-  # == Template caching
+  # === Template caching
   #
-  # By default, Rails will compile each template to a method in order to render it. When you alter a template, Rails will
-  # check the file's modification time and recompile it.
+  # By default, Rails will compile each template to a method in order to render it. When you alter a template,
+  # Rails will check the file's modification time and recompile it in development mode.
   #
   # == Builder
   #
-  # Builder templates are a more programmatic alternative to ERb. They are especially useful for generating XML content. An XmlMarkup object
+  # Builder templates are a more programmatic alternative to ERB. They are especially useful for generating XML content. An XmlMarkup object
   # named +xml+ is automatically made available to templates with a <tt>.builder</tt> extension.
   #
   # Here are some basic examples:
   #
-  #   xml.em("emphasized")                              # => <em>emphasized</em>
-  #   xml.em { xml.b("emph & bold") }                   # => <em><b>emph &amp; bold</b></em>
-  #   xml.a("A Link", "href"=>"http://onestepback.org") # => <a href="http://onestepback.org">A Link</a>
-  #   xml.target("name"=>"compile", "option"=>"fast")   # => <target option="fast" name="compile"\>
-  #                                                     # NOTE: order of attributes is not specified.
+  #   xml.em("emphasized")                                 # => <em>emphasized</em>
+  #   xml.em { xml.b("emph & bold") }                      # => <em><b>emph &amp; bold</b></em>
+  #   xml.a("A Link", "href" => "http://onestepback.org")  # => <a href="http://onestepback.org">A Link</a>
+  #   xml.target("name" => "compile", "option" => "fast")  # => <target option="fast" name="compile"\>
+  #                                                        # NOTE: order of attributes is not specified.
   #
   # Any method with a block will be treated as an XML markup tag with nested markup in the block. For example, the following:
   #
-  #   xml.div {
+  #   xml.div do
   #     xml.h1(@person.name)
   #     xml.p(@person.bio)
-  #   }
+  #   end
   #
   # would produce something like:
   #
@@ -115,7 +113,7 @@ module ActionView #:nodoc:
   #       xml.language "en-us"
   #       xml.ttl "40"
   #
-  #       for item in @recent_items
+  #       @recent_items.each do |item|
   #         xml.item do
   #           xml.title(item_title(item))
   #           xml.description(item_description(item)) if item_description(item)
@@ -130,102 +128,72 @@ module ActionView #:nodoc:
   #   end
   #
   # More builder documentation can be found at http://builder.rubyforge.org.
-  #
-  # == JavaScriptGenerator
-  #
-  # JavaScriptGenerator templates end in <tt>.rjs</tt>. Unlike conventional templates which are used to
-  # render the results of an action, these templates generate instructions on how to modify an already rendered page. This makes it easy to
-  # modify multiple elements on your page in one declarative Ajax response. Actions with these templates are called in the background with Ajax
-  # and make updates to the page where the request originated from.
-  #
-  # An instance of the JavaScriptGenerator object named +page+ is automatically made available to your template, which is implicitly wrapped in an ActionView::Helpers::PrototypeHelper#update_page block.
-  #
-  # When an <tt>.rjs</tt> action is called with +link_to_remote+, the generated JavaScript is automatically evaluated.  Example:
-  #
-  #   link_to_remote :url => {:action => 'delete'}
-  #
-  # The subsequently rendered <tt>delete.rjs</tt> might look like:
-  #
-  #   page.replace_html  'sidebar', :partial => 'sidebar'
-  #   page.remove        "person-#{@person.id}"
-  #   page.visual_effect :highlight, 'user-list'
-  #
-  # This refreshes the sidebar, removes a person element and highlights the user list.
-  #
-  # See the ActionView::Helpers::PrototypeHelper::GeneratorMethods documentation for more details.
   class Base
-    module Subclasses
-    end
+    include Helpers, ::ERB::Util, Context
 
-    include Helpers, Rendering, Partials, Layouts, ::ERB::Util, Context
-    extend  ActiveSupport::Memoizable
+    # Specify the proc used to decorate input tags that refer to attributes with errors.
+    cattr_accessor :field_error_proc
+    @@field_error_proc = Proc.new{ |html_tag, instance| "<div class=\"field_with_errors\">#{html_tag}</div>".html_safe }
 
-    # Specify whether RJS responses should be wrapped in a try/catch block
-    # that alert()s the caught exception (and then re-raises it).
-    cattr_accessor :debug_rjs
-    @@debug_rjs = false
+    # How to complete the streaming when an exception occurs.
+    # This is our best guess: first try to close the attribute, then the tag.
+    cattr_accessor :streaming_completion_on_exception
+    @@streaming_completion_on_exception = %("><script>window.location = "/500.html"</script></html>)
 
-    class_attribute :helpers
-    remove_method :helpers
-    attr_reader :helpers
+    # Specify whether rendering within namespaced controllers should prefix
+    # the partial paths for ActiveModel objects with the namespace.
+    # (e.g., an Admin::PostsController would render @post using /admin/posts/_post.erb)
+    cattr_accessor :prefix_partial_path_with_controller_namespace
+    @@prefix_partial_path_with_controller_namespace = true
 
-    class_attribute :_router
+    # Specify default_formats that can be rendered.
+    cattr_accessor :default_formats
+
+    class_attribute :_routes
+    class_attribute :logger
 
     class << self
       delegate :erb_trim_mode=, :to => 'ActionView::Template::Handlers::ERB'
-      delegate :logger, :to => 'ActionController::Base', :allow_nil => true
-    end
 
-    attr_accessor :base_path, :assigns, :template_extension, :lookup_context
-    attr_internal :captures, :request, :controller, :template, :config
-
-    delegate :find_template, :template_exists?, :formats, :formats=, :locale, :locale=,
-             :view_paths, :view_paths=, :with_fallbacks, :update_details, :to => :lookup_context
-
-    delegate :request_forgery_protection_token, :template, :params, :session, :cookies, :response, :headers,
-             :flash, :action_name, :controller_name, :to => :controller
-
-    delegate :logger, :to => :controller, :allow_nil => true
-
-    # TODO: HACK FOR RJS
-    def view_context
-      self
-    end
-
-    def self.xss_safe? #:nodoc:
-      true
-    end
-
-    def self.process_view_paths(value)
-      ActionView::PathSet.new(Array.wrap(value))
-    end
-
-    def initialize(lookup_context = nil, assigns_for_first_render = {}, controller = nil, formats = nil) #:nodoc:
-      @config = nil
-      @assigns = assigns_for_first_render.each { |key, value| instance_variable_set("@#{key}", value) }
-      @helpers = self.class.helpers || Module.new
-
-      if @_controller = controller
-        @_request = controller.request if controller.respond_to?(:request)
+      def cache_template_loading
+        ActionView::Resolver.caching?
       end
 
-      @_config       = ActiveSupport::InheritableOptions.new(controller.config) if controller && controller.respond_to?(:config)
-      @_content_for  = Hash.new { |h,k| h[k] = ActiveSupport::SafeBuffer.new }
-      @_virtual_path = nil
+      def cache_template_loading=(value)
+        ActionView::Resolver.caching = value
+      end
 
-      @lookup_context = lookup_context.is_a?(ActionView::LookupContext) ?
-        lookup_context : ActionView::LookupContext.new(lookup_context)
-      @lookup_context.formats = formats if formats
+      def xss_safe? #:nodoc:
+        true
+      end
     end
 
-    def controller_path
-      @controller_path ||= controller && controller.controller_path
+    attr_accessor :view_renderer
+    attr_internal :config, :assigns
+
+    delegate :lookup_context, :to => :view_renderer
+    delegate :formats, :formats=, :locale, :locale=, :view_paths, :view_paths=, :to => :lookup_context
+
+    def assign(new_assigns) # :nodoc:
+      @_assigns = new_assigns.each { |key, value| instance_variable_set("@#{key}", value) }
     end
 
-    def punctuate_body!(part)
-      flush_output_buffer
-      response.body_parts << part
-      nil
+    def initialize(context = nil, assigns = {}, controller = nil, formats = nil) #:nodoc:
+      @_config = ActiveSupport::InheritableOptions.new
+
+      if context.is_a?(ActionView::Renderer)
+        @view_renderer = context
+      else
+        lookup_context = context.is_a?(ActionView::LookupContext) ?
+          context : ActionView::LookupContext.new(context)
+        lookup_context.formats  = formats if formats
+        lookup_context.prefixes = controller._prefixes if controller
+        @view_renderer = ActionView::Renderer.new(lookup_context)
+      end
+
+      assign(assigns)
+      assign_controller(controller)
+      _prepare_context
     end
 
     ActiveSupport.run_load_hooks(:action_view, self)

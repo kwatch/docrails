@@ -1,27 +1,33 @@
 require 'abstract_unit'
-require 'logger'
+require 'active_support/logger'
 
 class CaptureController < ActionController::Base
   def self.controller_name; "test"; end
   def self.controller_path; "test"; end
 
   def content_for
+    @title = nil
     render :layout => "talk_from_action"
   end
 
   def content_for_with_parameter
+    @title = nil
     render :layout => "talk_from_action"
   end
 
   def content_for_concatenated
+    @title = nil
     render :layout => "talk_from_action"
   end
 
   def non_erb_block_content_for
+    @title = nil
     render :layout => "talk_from_action"
   end
 
-  def rescue_action(e) raise end
+  def proper_block_detection
+    @todo = "some todo"
+  end
 end
 
 class CaptureTest < ActionController::TestCase
@@ -31,7 +37,7 @@ class CaptureTest < ActionController::TestCase
     super
     # enable a logger so that (e.g.) the benchmarking stuff runs, so we can get
     # a more accurate simulation of what happens in "real life".
-    @controller.logger = Logger.new(nil)
+    @controller.logger = ActiveSupport::Logger.new(nil)
 
     @request.host = "www.nextangle.com"
   end
@@ -62,12 +68,12 @@ class CaptureTest < ActionController::TestCase
   end
 
   def test_proper_block_detection
-    @todo = "some todo"
     get :proper_block_detection
+    assert_equal "some todo", @response.body
   end
 
   private
     def expected_content_for_output
-      "<title>Putting stuff in the title!</title>\n\nGreat stuff!"
+      "<title>Putting stuff in the title!</title>\nGreat stuff!"
     end
 end

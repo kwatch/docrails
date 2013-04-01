@@ -1,5 +1,5 @@
 #--
-# Copyright (c) 2005 David Heinemeier Hansson
+# Copyright (c) 2005-2013 David Heinemeier Hansson
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -21,53 +21,47 @@
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #++
 
-module ActiveSupport
-  class << self
-    attr_accessor :load_all_hooks
-    def on_load_all(&hook) load_all_hooks << hook end
-    def load_all!; load_all_hooks.each { |hook| hook.call } end
-  end
-  self.load_all_hooks = []
-
-  on_load_all do
-    [Dependencies, Deprecation, Gzip, MessageVerifier, Multibyte, SecureRandom]
-  end
-end
-
+require 'securerandom'
 require "active_support/dependencies/autoload"
+require "active_support/version"
+require "active_support/logger"
+require "active_support/lazy_load_hooks"
 
 module ActiveSupport
   extend ActiveSupport::Autoload
 
-  # TODO: Narrow this list down
+  autoload :Concern
+  autoload :Dependencies
+  autoload :DescendantsTracker
+  autoload :FileUpdateChecker
+  autoload :LogSubscriber
+  autoload :Notifications
+
   eager_autoload do
     autoload :BacktraceCleaner
-    autoload :Base64
     autoload :BasicObject
+    autoload :ProxyObject
     autoload :Benchmarkable
-    autoload :BufferedLogger
     autoload :Cache
     autoload :Callbacks
-    autoload :Concern
     autoload :Configurable
     autoload :Deprecation
     autoload :Gzip
     autoload :Inflector
     autoload :JSON
-    autoload :Memoizable
+    autoload :KeyGenerator
     autoload :MessageEncryptor
     autoload :MessageVerifier
     autoload :Multibyte
     autoload :OptionMerger
     autoload :OrderedHash
     autoload :OrderedOptions
-    autoload :Notifications
-    autoload :Rescuable
-    autoload :SecureRandom
     autoload :StringInquirer
+    autoload :TaggedLogging
     autoload :XmlMini
   end
 
+  autoload :Rescuable
   autoload :SafeBuffer, "active_support/core_ext/string/output_safety"
   autoload :TestCase
 end

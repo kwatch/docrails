@@ -1,43 +1,26 @@
 namespace :rails do
-  namespace :freeze do
-    desc "The rails:freeze:gems is deprecated, please use bundle install instead"
-    task :gems do
-      abort "The rails:freeze:gems is deprecated, please use bundle install instead"
-    end
+  desc "Update configs and some other initially generated files (or use just update:configs, update:bin, or update:application_controller)"
+  task update: [ "update:configs", "update:bin", "update:application_controller" ]
 
-    desc 'The freeze:edge command has been deprecated, specify the path setting in your app Gemfile instead and bundle install'
-    task :edge do
-      abort 'The freeze:edge command has been deprecated, specify the path setting in your app Gemfile instead and bundle install'
-    end
-  end
-
-  desc 'The unfreeze command has been deprecated, please use bundler commands instead'
-  task :unfreeze do
-    abort 'The unfreeze command has been deprecated, please use bundler commands instead'
-  end
-
-  desc "Update both configs, scripts and public/javascripts from Rails"
-  task :update => [ "update:configs", "update:javascripts", "update:scripts", "update:application_controller" ]
-
-  desc "Applies the template supplied by LOCATION=/path/to/template"
+  desc "Applies the template supplied by LOCATION=(/path/to/template) or URL"
   task :template do
     template = ENV["LOCATION"]
+    raise "No LOCATION value given. Please set LOCATION either as path to a file or a URL" if template.blank?
     template = File.expand_path(template) if template !~ %r{\A[A-Za-z][A-Za-z0-9+\-\.]*://}
-
     require 'rails/generators'
     require 'rails/generators/rails/app/app_generator'
-    generator = Rails::Generators::AppGenerator.new [ Rails.root ], {}, :destination_root => Rails.root
-    generator.apply template, :verbose => false
+    generator = Rails::Generators::AppGenerator.new [Rails.root], {}, destination_root: Rails.root
+    generator.apply template, verbose: false
   end
 
   namespace :templates do
-    desc "Copy all the templates from rails to the application directory for customization. Already existing local copies will be overwritten"
+    # desc "Copy all the templates from rails to the application directory for customization. Already existing local copies will be overwritten"
     task :copy do
       generators_lib = File.expand_path("../../generators", __FILE__)
       project_templates = "#{Rails.root}/lib/templates"
 
       default_templates = { "erb"   => %w{controller mailer scaffold},
-                            "rails" => %w{controller helper metal scaffold_controller stylesheets} }
+                            "rails" => %w{controller helper scaffold_controller assets} }
 
       default_templates.each do |type, names|
         local_template_type_dir = File.join(project_templates, type)
@@ -54,38 +37,33 @@ namespace :rails do
 
   namespace :update do
     def invoke_from_app_generator(method)
-      app_generator.invoke(method)
+      app_generator.send(method)
     end
 
     def app_generator
       @app_generator ||= begin
         require 'rails/generators'
         require 'rails/generators/rails/app/app_generator'
-        gen = Rails::Generators::AppGenerator.new ["rails"], { :with_dispatchers => true },
-                                                             :destination_root => Rails.root
+        gen = Rails::Generators::AppGenerator.new ["rails"], { with_dispatchers: true },
+                                                             destination_root: Rails.root
         File.exists?(Rails.root.join("config", "application.rb")) ?
           gen.send(:app_const) : gen.send(:valid_app_const?)
         gen
       end
     end
 
-    desc "Update config/boot.rb from your current rails install"
+    # desc "Update config/boot.rb from your current rails install"
     task :configs do
       invoke_from_app_generator :create_boot_file
       invoke_from_app_generator :create_config_files
     end
 
-    desc "Update Prototype javascripts from your current rails install"
-    task :javascripts do
-      invoke_from_app_generator :create_prototype_files
+    # desc "Adds new executables to the application bin/ directory"
+    task :bin do
+      invoke_from_app_generator :create_bin_files
     end
 
-    desc "Adds new scripts to the application script/ directory"
-    task :scripts do
-      invoke_from_app_generator :create_script_files
-    end
-
-    desc "Rename application.rb to application_controller.rb"
+    # desc "Rename application.rb to application_controller.rb"
     task :application_controller do
       old_style = Rails.root + '/app/controllers/application.rb'
       new_style = Rails.root + '/app/controllers/application_controller.rb'

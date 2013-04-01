@@ -29,7 +29,7 @@ class DefaultTest < ActiveRecord::TestCase
       assert_equal BigDecimal.new("2.78"), default.decimal_number
     end
   end
-  
+
   if current_adapter?(:PostgreSQLAdapter)
     def test_multiline_default_text
       # older postgres versions represent the default with escapes ("\\012" for a newline)
@@ -39,23 +39,72 @@ class DefaultTest < ActiveRecord::TestCase
   end
 end
 
-if current_adapter?(:MysqlAdapter)
+if current_adapter?(:MysqlAdapter, :Mysql2Adapter)
   class DefaultsTestWithoutTransactionalFixtures < ActiveRecord::TestCase
     # ActiveRecord::Base#create! (and #save and other related methods) will
     # open a new transaction. When in transactional fixtures mode, this will
-    # cause ActiveRecord to create a new savepoint. However, since MySQL doesn't
+    # cause Active Record to create a new savepoint. However, since MySQL doesn't
     # support DDL transactions, creating a table will result in any created
     # savepoints to be automatically released. This in turn causes the savepoint
     # release code in AbstractAdapter#transaction to fail.
     #
     # We don't want that to happen, so we disable transactional fixtures here.
     self.use_transactional_fixtures = false
-    
-    # MySQL 5 and higher is quirky with not null text/blob columns.
-    # With MySQL Text/blob columns cannot have defaults. If the column is not
-    # null MySQL will report that the column has a null default
-    # but it behaves as though the column had a default of ''
-    def test_mysql_text_not_null_defaults
+
+    def using_strict(strict)
+      connection = ActiveRecord::Base.remove_connection
+      ActiveRecord::Base.establish_connection connection.merge(strict: strict)
+      yield
+    ensure
+      ActiveRecord::Base.remove_connection
+      ActiveRecord::Base.establish_connection connection
+    end
+
+    # MySQL cannot have defaults on text/blob columns. It reports the
+    # default value as null.
+    #
+    # Despite this, in non-strict mode, MySQL will use an empty string
+    # as the default value of the field, if no other value is
+    # specified.
+    #
+    # Therefore, in non-strict mode, we want column.default to report
+    # an empty string as its default, to be consistent with that.
+    #
+    # In strict mode, column.default should be nil.
+    def test_mysql_text_not_null_defaults_non_strict
+      using_strict(false) do
+        with_text_blob_not_null_table do |klass|
+          assert_equal '', klass.columns_hash['non_null_blob'].default
+          assert_equal '', klass.columns_hash['non_null_text'].default
+
+          assert_nil klass.columns_hash['null_blob'].default
+          assert_nil klass.columns_hash['null_text'].default
+
+          instance = klass.create!
+
+          assert_equal '', instance.non_null_text
+          assert_equal '', instance.non_null_blob
+
+          assert_nil instance.null_text
+          assert_nil instance.null_blob
+        end
+      end
+    end
+
+    def test_mysql_text_not_null_defaults_strict
+      using_strict(true) do
+        with_text_blob_not_null_table do |klass|
+          assert_nil klass.columns_hash['non_null_blob'].default
+          assert_nil klass.columns_hash['non_null_text'].default
+          assert_nil klass.columns_hash['null_blob'].default
+          assert_nil klass.columns_hash['null_text'].default
+
+          assert_raises(ActiveRecord::StatementInvalid) { klass.create }
+        end
+      end
+    end
+
+    def with_text_blob_not_null_table
       klass = Class.new(ActiveRecord::Base)
       klass.table_name = 'test_mysql_text_not_null_defaults'
       klass.connection.create_table klass.table_name do |t|
@@ -64,23 +113,12 @@ if current_adapter?(:MysqlAdapter)
         t.column :null_text, :text, :null => true
         t.column :null_blob, :blob, :null => true
       end
-      assert_equal '', klass.columns_hash['non_null_blob'].default
-      assert_equal '', klass.columns_hash['non_null_text'].default
 
-      assert_equal nil, klass.columns_hash['null_blob'].default
-      assert_equal nil, klass.columns_hash['null_text'].default
-
-      assert_nothing_raised do
-        instance = klass.create!
-        assert_equal '', instance.non_null_text
-        assert_equal '', instance.non_null_blob
-        assert_nil instance.null_text
-        assert_nil instance.null_blob
-      end
+      yield klass
     ensure
       klass.connection.drop_table(klass.table_name) rescue nil
     end
-    
+
     # MySQL uses an implicit default 0 rather than NULL unless in strict mode.
     # We use an implicit NULL so schema.rb is compatible with other databases.
     def test_mysql_integer_not_null_defaults
@@ -106,6 +144,46 @@ if current_adapter?(:MysqlAdapter)
       end
     ensure
       klass.connection.drop_table(klass.table_name) rescue nil
+    end
+  end
+end
+
+if current_adapter?(:PostgreSQLAdapter)
+  class DefaultsUsingMultipleSchemasAndDomainTest < ActiveSupport::TestCase
+    def setup
+      @connection = ActiveRecord::Base.connection
+
+      @old_search_path = @connection.schema_search_path
+      @connection.schema_search_path = "schema_1, pg_catalog"
+      @connection.create_table "defaults" do |t|
+        t.text "text_col", :default => "some value"
+        t.string "string_col", :default => "some value"
+      end
+      Default.reset_column_information
+    end
+
+    def test_text_defaults_in_new_schema_when_overriding_domain
+      assert_equal "some value", Default.new.text_col, "Default of text column was not correctly parse"
+    end
+
+    def test_string_defaults_in_new_schema_when_overriding_domain
+      assert_equal "some value", Default.new.string_col, "Default of string column was not correctly parse"
+    end
+
+    def test_bpchar_defaults_in_new_schema_when_overriding_domain
+      @connection.execute "ALTER TABLE defaults ADD bpchar_col bpchar DEFAULT 'some value'"
+      Default.reset_column_information
+      assert_equal "some value", Default.new.bpchar_col, "Default of bpchar column was not correctly parse"
+    end
+
+    def test_text_defaults_after_updating_column_default
+      @connection.execute "ALTER TABLE defaults ALTER COLUMN text_col SET DEFAULT 'some text'::schema_1.text"
+      assert_equal "some text", Default.new.text_col, "Default of text column was not correctly parse after updating default using '::text' since postgreSQL will add parens to the default in db"
+    end
+
+    def teardown
+      @connection.schema_search_path = @old_search_path
+      Default.reset_column_information
     end
   end
 end

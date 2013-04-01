@@ -4,6 +4,8 @@ require 'cases/helper'
 require 'models/topic'
 require 'models/person'
 
+require 'bigdecimal'
+
 class NumericalityValidationTest < ActiveModel::TestCase
 
   def teardown
@@ -12,13 +14,13 @@ class NumericalityValidationTest < ActiveModel::TestCase
 
   NIL = [nil]
   BLANK = ["", " ", " \t \r \n"]
-  BIGDECIMAL_STRINGS = %w(12345678901234567890.1234567890) # 30 significent digits
+  BIGDECIMAL_STRINGS = %w(12345678901234567890.1234567890) # 30 significant digits
   FLOAT_STRINGS = %w(0.0 +0.0 -0.0 10.0 10.5 -10.5 -0.0001 -090.1 90.1e1 -90.1e5 -90.1e-5 90e-5)
   INTEGER_STRINGS = %w(0 +0 -0 10 +10 -10 0090 -090)
   FLOATS = [0.0, 10.0, 10.5, -10.5, -0.0001] + FLOAT_STRINGS
   INTEGERS = [0, 10, -10] + INTEGER_STRINGS
   BIGDECIMAL = BIGDECIMAL_STRINGS.collect! { |bd| BigDecimal.new(bd) }
-  JUNK = ["not a number", "42 not a number", "0xdeadbeef", "00-1", "--3", "+-3", "+3-1", "-+019.0", "12.12.13.12", "123\nnot a number"]
+  JUNK = ["not a number", "42 not a number", "0xdeadbeef", "0xinvalidhex", "0Xdeadbeef", "00-1", "--3", "+-3", "+3-1", "-+019.0", "12.12.13.12", "123\nnot a number"]
   INFINITY = [1.0/0.0]
 
   def test_default_validates_numericality_of
@@ -102,6 +104,13 @@ class NumericalityValidationTest < ActiveModel::TestCase
 
     invalid!([1, 3, 4])
     valid!([2])
+  end
+
+  def test_validates_numericality_with_other_than
+    Topic.validates_numericality_of :approved, :other_than => 0
+
+    invalid!([0, 0.0])
+    valid!([-1, 42])
   end
 
   def test_validates_numericality_with_proc

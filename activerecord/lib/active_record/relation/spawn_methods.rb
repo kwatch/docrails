@@ -1,100 +1,73 @@
-require 'active_support/core_ext/object/blank'
+require 'active_support/core_ext/hash/except'
+require 'active_support/core_ext/hash/slice'
+require 'active_record/relation/merger'
 
 module ActiveRecord
   module SpawnMethods
-    def merge(r)
-      merged_relation = clone
-      return merged_relation unless r
 
-      (Relation::ASSOCIATION_METHODS + Relation::MULTI_VALUE_METHODS).reject {|m| [:joins, :where].include?(m)}.each do |method|
-        value = r.send(:"#{method}_values")
-        merged_relation.send(:"#{method}_values=", value) if value.present?
-      end
-
-      merged_relation = merged_relation.joins(r.joins_values)
-
-      merged_wheres = @where_values
-
-      r.where_values.each do |w|
-        if w.is_a?(Arel::Predicates::Equality)
-          merged_wheres = merged_wheres.reject {|p| p.is_a?(Arel::Predicates::Equality) && p.operand1.name == w.operand1.name }
-        end
-
-        merged_wheres += [w]
-      end
-
-      merged_relation.where_values = merged_wheres
-
-      Relation::SINGLE_VALUE_METHODS.reject {|m| m == :lock}.each do |method|
-        unless (value = r.send(:"#{method}_value")).nil?
-          merged_relation.send(:"#{method}_value=", value)
-        end
-      end
-
-      merged_relation.lock_value = r.lock_value unless merged_relation.lock_value
-
-      # Apply scope extension modules
-      merged_relation.send :apply_modules, r.extensions
-
-      merged_relation
+    # This is overridden by Associations::CollectionProxy
+    def spawn #:nodoc:
+      clone
     end
 
-    alias :& :merge
+    # Merges in the conditions from <tt>other</tt>, if <tt>other</tt> is an <tt>ActiveRecord::Relation</tt>.
+    # Returns an array representing the intersection of the resulting records with <tt>other</tt>, if <tt>other</tt> is an array.
+    #   Post.where(published: true).joins(:comments).merge( Comment.where(spam: false) )
+    #   # Performs a single join query with both where conditions.
+    #
+    #   recent_posts = Post.order('created_at DESC').first(5)
+    #   Post.where(published: true).merge(recent_posts)
+    #   # Returns the intersection of all published posts with the 5 most recently created posts.
+    #   # (This is just an example. You'd probably want to do this with a single query!)
+    #
+    # Procs will be evaluated by merge:
+    #
+    #   Post.where(published: true).merge(-> { joins(:comments) })
+    #   # => Post.where(published: true).joins(:comments)
+    #
+    # This is mainly intended for sharing common conditions between multiple associations.
+    def merge(other)
+      if other.is_a?(Array)
+        to_a & other
+      elsif other
+        spawn.merge!(other)
+      else
+        self
+      end
+    end
 
+    def merge!(other) # :nodoc:
+      if !other.is_a?(Relation) && other.respond_to?(:to_proc)
+        instance_exec(&other)
+      else
+        klass = other.is_a?(Hash) ? Relation::HashMerger : Relation::Merger
+        klass.new(self, other).merge
+      end
+    end
+
+    # Removes from the query the condition(s) specified in +skips+.
+    #
+    #   Post.order('id asc').except(:order)                  # discards the order condition
+    #   Post.where('id > 10').order('id asc').except(:where) # discards the where condition but keeps the order
     def except(*skips)
-      result = self.class.new(@klass, table)
-
-      (Relation::ASSOCIATION_METHODS + Relation::MULTI_VALUE_METHODS).each do |method|
-        result.send(:"#{method}_values=", send(:"#{method}_values")) unless skips.include?(method)
-      end
-
-      Relation::SINGLE_VALUE_METHODS.each do |method|
-        result.send(:"#{method}_value=", send(:"#{method}_value")) unless skips.include?(method)
-      end
-
-      result
+      relation_with values.except(*skips)
     end
 
+    # Removes any condition from the query other than the one(s) specified in +onlies+.
+    #
+    #   Post.order('id asc').only(:where)         # discards the order condition
+    #   Post.order('id asc').only(:where, :order) # uses the specified order
     def only(*onlies)
-      result = self.class.new(@klass, table)
-
-      onlies.each do |only|
-        if (Relation::ASSOCIATION_METHODS + Relation::MULTI_VALUE_METHODS).include?(only)
-          result.send(:"#{only}_values=", send(:"#{only}_values"))
-        elsif Relation::SINGLE_VALUE_METHODS.include?(only)
-          result.send(:"#{only}_value=", send(:"#{only}_value"))
-        else
-          raise "Invalid argument : #{only}"
-        end
-      end
-
-      result
+      relation_with values.slice(*onlies)
     end
 
-    VALID_FIND_OPTIONS = [ :conditions, :include, :joins, :limit, :offset, :extend,
-                           :order, :select, :readonly, :group, :having, :from, :lock ]
+    private
 
-    def apply_finder_options(options)
-      relation = clone
-      return relation unless options
-
-      options.assert_valid_keys(VALID_FIND_OPTIONS)
-
-      [:joins, :select, :group, :having, :limit, :offset, :from, :lock, :readonly].each do |finder|
-        relation = relation.send(finder, options[finder]) if options.has_key?(finder)
+      def relation_with(values) # :nodoc:
+        result = Relation.new(klass, table, values)
+        result.default_scoped = default_scoped
+        result.extend(*extending_values) if extending_values.any?
+        result
       end
-
-      # Give precedence to newly-applied orders and groups to play nicely with with_scope
-      [:group, :order].each do |finder|
-        relation.send("#{finder}_values=", Array.wrap(options[finder]) + relation.send("#{finder}_values")) if options.has_key?(finder)
-      end
-
-      relation = relation.where(options[:conditions]) if options.has_key?(:conditions)
-      relation = relation.includes(options[:include]) if options.has_key?(:include)
-      relation = relation.extending(options[:extend]) if options.has_key?(:extend)
-
-      relation
-    end
-
   end
 end

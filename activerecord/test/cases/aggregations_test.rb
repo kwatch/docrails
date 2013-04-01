@@ -1,6 +1,5 @@
 require "cases/helper"
 require 'models/customer'
-require 'active_support/core_ext/exception'
 
 class AggregationsTest < ActiveRecord::TestCase
   fixtures :customers
@@ -26,7 +25,7 @@ class AggregationsTest < ActiveRecord::TestCase
 
   def test_immutable_value_objects
     customers(:david).balance = Money.new(100)
-    assert_raise(ActiveSupport::FrozenObjectError) { customers(:david).balance.instance_eval { @amount = 20 } }
+    assert_raise(RuntimeError) { customers(:david).balance.instance_eval { @amount = 20 } }
   end
 
   def test_inferred_mapping
@@ -58,36 +57,36 @@ class AggregationsTest < ActiveRecord::TestCase
   end
 
   def test_gps_equality
-    assert GpsLocation.new('39x110') == GpsLocation.new('39x110')
+    assert_equal GpsLocation.new('39x110'), GpsLocation.new('39x110')
   end
 
   def test_gps_inequality
-    assert GpsLocation.new('39x110') != GpsLocation.new('39x111')
+    assert_not_equal GpsLocation.new('39x110'), GpsLocation.new('39x111')
   end
 
   def test_allow_nil_gps_is_nil
-    assert_equal nil, customers(:zaphod).gps_location
+    assert_nil customers(:zaphod).gps_location
   end
 
   def test_allow_nil_gps_set_to_nil
     customers(:david).gps_location = nil
     customers(:david).save
     customers(:david).reload
-    assert_equal nil, customers(:david).gps_location
+    assert_nil customers(:david).gps_location
   end
 
   def test_allow_nil_set_address_attributes_to_nil
     customers(:zaphod).address = nil
-    assert_equal nil, customers(:zaphod).attributes[:address_street]
-    assert_equal nil, customers(:zaphod).attributes[:address_city]
-    assert_equal nil, customers(:zaphod).attributes[:address_country]
+    assert_nil customers(:zaphod).attributes[:address_street]
+    assert_nil customers(:zaphod).attributes[:address_city]
+    assert_nil customers(:zaphod).attributes[:address_country]
   end
 
   def test_allow_nil_address_set_to_nil
     customers(:zaphod).address = nil
     customers(:zaphod).save
     customers(:zaphod).reload
-    assert_equal nil, customers(:zaphod).address
+    assert_nil customers(:zaphod).address
   end
 
   def test_nil_raises_error_when_allow_nil_is_false
@@ -99,14 +98,34 @@ class AggregationsTest < ActiveRecord::TestCase
     customers(:zaphod).save
     customers(:zaphod).reload
     assert_kind_of Address, customers(:zaphod).address
-    assert customers(:zaphod).address.street.nil?
+    assert_nil customers(:zaphod).address.street
   end
 
   def test_nil_assignment_results_in_nil
     customers(:david).gps_location = GpsLocation.new('39x111')
-    assert_not_equal nil, customers(:david).gps_location
+    assert_not_nil customers(:david).gps_location
     customers(:david).gps_location = nil
-    assert_equal nil, customers(:david).gps_location
+    assert_nil customers(:david).gps_location
+  end
+
+  def test_nil_return_from_converter_is_respected_when_allow_nil_is_true
+    customers(:david).non_blank_gps_location = ""
+    customers(:david).save
+    customers(:david).reload
+    assert_nil customers(:david).non_blank_gps_location
+  ensure
+    Customer.gps_conversion_was_run = nil
+  end
+
+  def test_nil_return_from_converter_results_in_failure_when_allow_nil_is_false
+    assert_raises(NoMethodError) do
+      customers(:barney).gps_location = ""
+    end
+  end
+
+  def test_do_not_run_the_converter_when_nil_was_set
+    customers(:david).non_blank_gps_location = nil
+    assert_nil Customer.gps_conversion_was_run
   end
 
   def test_custom_constructor
@@ -121,39 +140,11 @@ class AggregationsTest < ActiveRecord::TestCase
   end
 end
 
-class DeprecatedAggregationsTest < ActiveRecord::TestCase
-  class Person < ActiveRecord::Base; end
-
-  def test_conversion_block_is_deprecated
-    assert_deprecated 'conversion block has been deprecated' do
-      Person.composed_of(:balance, :class_name => "Money", :mapping => %w(balance amount)) { |balance| balance.to_money }
-    end
-  end
-
-  def test_conversion_block_used_when_converter_option_is_nil
-    assert_deprecated 'conversion block has been deprecated' do
-      Person.composed_of(:balance, :class_name => "Money", :mapping => %w(balance amount)) { |balance| balance.to_money }
-    end
-    assert_raise(NoMethodError) { Person.new.balance = 5 }
-  end
-
-  def test_converter_option_overrides_conversion_block
-    assert_deprecated 'conversion block has been deprecated' do
-      Person.composed_of(:balance, :class_name => "Money", :mapping => %w(balance amount), :converter => Proc.new { |balance| Money.new(balance) }) { |balance| balance.to_money }
-    end
-
-    person = Person.new
-    assert_nothing_raised { person.balance = 5 }
-    assert_equal 5, person.balance.amount
-    assert_kind_of Money, person.balance
-  end
-end
-
 class OverridingAggregationsTest < ActiveRecord::TestCase
   class Name; end
   class DifferentName; end
 
-  class Person   < ActiveRecord::Base
+  class Person < ActiveRecord::Base
     composed_of :composed_of, :mapping => %w(person_first_name first_name)
   end
 

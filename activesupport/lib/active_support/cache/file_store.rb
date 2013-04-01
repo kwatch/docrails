@@ -1,26 +1,29 @@
+require 'active_support/core_ext/marshal'
 require 'active_support/core_ext/file/atomic'
+require 'active_support/core_ext/string/conversions'
+require 'uri/common'
 
 module ActiveSupport
   module Cache
     # A cache store implementation which stores everything on the filesystem.
     #
     # FileStore implements the Strategy::LocalCache strategy which implements
-    # an in memory cache inside of a block.
+    # an in-memory cache inside of a block.
     class FileStore < Store
       attr_reader :cache_path
 
       DIR_FORMATTER = "%03X"
-      ESCAPE_FILENAME_CHARS = /[^a-z0-9_.-]/i
-      UNESCAPE_FILENAME_CHARS = /%[0-9A-F]{2}/
+      FILENAME_MAX_SIZE = 228 # max filename size on file system is 255, minus room for timestamp and random characters appended by Tempfile (used by atomic write)
+      EXCLUDED_DIRS = ['.', '..'].freeze
 
       def initialize(cache_path, options = nil)
         super(options)
-        @cache_path = cache_path
+        @cache_path = cache_path.to_s
         extend Strategy::LocalCache
       end
 
       def clear(options = nil)
-        root_dirs = Dir.entries(cache_path).reject{|f| ['.', '..'].include?(f)}
+        root_dirs = Dir.entries(cache_path).reject {|f| (EXCLUDED_DIRS + [".gitkeep"]).include?(f)}
         FileUtils.rm_r(root_dirs.collect{|f| File.join(cache_path, f)})
       end
 
@@ -76,21 +79,10 @@ module ActiveSupport
         def read_entry(key, options)
           file_name = key_file_path(key)
           if File.exist?(file_name)
-            entry = File.open(file_name) { |f| Marshal.load(f) }
-            if entry && !entry.expired? && !entry.expires_in && !self.options[:expires_in]
-              # Check for deprecated use of +:expires_in+ option from versions < 3.0
-              deprecated_expires_in = options[:expires_in]
-              if deprecated_expires_in
-                ActiveSupport::Deprecation.warn('Setting :expires_in on read has been deprecated in favor of setting it on write.', caller)
-                if entry.created_at + deprecated_expires_in.to_f <= Time.now.to_f
-                  delete_entry(key, options)
-                  entry = nil
-                end
-              end
-            end
-            entry
+            File.open(file_name) { |f| Marshal.load(f) }
           end
-        rescue
+        rescue => e
+          logger.error("FileStoreError (#{e}): #{e.message}") if logger
           nil
         end
 
@@ -120,7 +112,7 @@ module ActiveSupport
         # Lock a file for a block so only one process can modify it at a time.
         def lock_file(file_name, &block) # :nodoc:
           if File.exist?(file_name)
-            File.open(file_name, 'r') do |f|
+            File.open(file_name, 'r+') do |f|
               begin
                 f.flock File::LOCK_EX
                 yield
@@ -135,34 +127,32 @@ module ActiveSupport
 
         # Translate a key into a file path.
         def key_file_path(key)
-          fname = key.to_s.gsub(ESCAPE_FILENAME_CHARS){|match| "%#{match.ord.to_s(16).upcase}"}
+          fname = URI.encode_www_form_component(key)
           hash = Zlib.adler32(fname)
           hash, dir_1 = hash.divmod(0x1000)
           dir_2 = hash.modulo(0x1000)
           fname_paths = []
-          # Make sure file name is < 255 characters so it doesn't exceed file system limits.
-          if fname.size <= 255
-            fname_paths << fname
-          else
-            while fname.size <= 255
-              fname_path << fname[0, 255]
-              fname = fname[255, -1]
-            end
-          end
+
+          # Make sure file name doesn't exceed file system limits.
+          begin
+            fname_paths << fname[0, FILENAME_MAX_SIZE]
+            fname = fname[FILENAME_MAX_SIZE..-1]
+          end until fname.blank?
+
           File.join(cache_path, DIR_FORMATTER % dir_1, DIR_FORMATTER % dir_2, *fname_paths)
         end
 
         # Translate a file path into a key.
         def file_path_key(path)
-          fname = path[cache_path.size, path.size].split(File::SEPARATOR, 4).last
-          fname.gsub(UNESCAPE_FILENAME_CHARS){|match| $1.ord.to_s(16)}
+          fname = path[cache_path.to_s.size..-1].split(File::SEPARATOR, 4).last
+          URI.decode_www_form_component(fname, Encoding::UTF_8)
         end
 
         # Delete empty directories in the cache.
         def delete_empty_directories(dir)
-          return if dir == cache_path
-          if Dir.entries(dir).reject{|f| ['.', '..'].include?(f)}.empty?
-            File.delete(dir) rescue nil
+          return if File.realpath(dir) == File.realpath(cache_path)
+          if Dir.entries(dir).reject {|f| EXCLUDED_DIRS.include?(f)}.empty?
+            Dir.delete(dir) rescue nil
             delete_empty_directories(File.dirname(dir))
           end
         end
@@ -173,8 +163,9 @@ module ActiveSupport
         end
 
         def search_dir(dir, &callback)
+          return if !File.exist?(dir)
           Dir.foreach(dir) do |d|
-            next if d == "." || d == ".."
+            next if EXCLUDED_DIRS.include?(d)
             name = File.join(dir, d)
             if File.directory?(name)
               search_dir(name, &callback)

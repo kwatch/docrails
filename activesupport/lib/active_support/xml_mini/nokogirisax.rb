@@ -1,9 +1,14 @@
-require 'nokogiri'
+begin
+  require 'nokogiri'
+rescue LoadError => e
+  $stderr.puts "You don't have nokogiri installed in your application. Please add it to your Gemfile and run bundle install"
+  raise e
+end
 require 'active_support/core_ext/object/blank'
+require 'stringio'
 
-# = XmlMini Nokogiri implementation using a SAX-based parser
 module ActiveSupport
-  module XmlMini_NokogiriSAX
+  module XmlMini_NokogiriSAX #:nodoc:
     extend self
 
     # Class that will build the hash while the XML document
@@ -33,8 +38,7 @@ module ActiveSupport
       end
 
       def start_element(name, attrs = [])
-        new_hash = { CONTENT_KEY => '' }
-        new_hash[attrs.shift] = attrs.shift while attrs.length > 0
+        new_hash = { CONTENT_KEY => '' }.merge(Hash[attrs])
         new_hash[HASH_SIZE_KEY] = new_hash.size + 1
 
         case current_hash[name]

@@ -1,6 +1,6 @@
 require 'abstract_unit'
 
-class QueryStringParsingTest < ActionController::IntegrationTest
+class QueryStringParsingTest < ActionDispatch::IntegrationTest
   class TestController < ActionController::Base
     class << self
       attr_accessor :last_query_parameters
@@ -81,7 +81,16 @@ class QueryStringParsingTest < ActionController::IntegrationTest
   end
 
   test "query string without equal" do
-    assert_parses({ "action" => nil }, "action")
+    assert_parses({"action" => nil}, "action")
+    assert_parses({"action" => {"foo" => nil}}, "action[foo]")
+    assert_parses({"action" => {"foo" => { "bar" => nil }}}, "action[foo][bar]")
+    assert_parses({"action" => {"foo" => { "bar" => nil }}}, "action[foo][bar][]")
+    assert_parses({"action" => {"foo" => nil }}, "action[foo][]")
+    assert_parses({"action"=>{"foo"=>[{"bar"=>nil}]}}, "action[foo][][bar]")
+  end
+
+  def test_array_parses_without_nil
+    assert_parses({"action" => ['1']}, "action[]=1&action[]")
   end
 
   test "query string with empty key" do
@@ -105,11 +114,22 @@ class QueryStringParsingTest < ActionController::IntegrationTest
     )
   end
 
+  test "ambiguous query string returns a bad request" do
+    with_routing do |set|
+      set.draw do
+        get ':action', :to => ::QueryStringParsingTest::TestController
+      end
+
+      get "/parse", nil, "QUERY_STRING" => "foo[]=bar&foo[4]=bar"
+      assert_response :bad_request
+    end
+  end
+
   private
     def assert_parses(expected, actual)
       with_routing do |set|
-        set.draw do |map|
-          match ':action', :to => ::QueryStringParsingTest::TestController
+        set.draw do
+          get ':action', :to => ::QueryStringParsingTest::TestController
         end
 
         get "/parse", actual

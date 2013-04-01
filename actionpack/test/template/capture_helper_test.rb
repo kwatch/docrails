@@ -4,7 +4,7 @@ class CaptureHelperTest < ActionView::TestCase
   def setup
     super
     @av = ActionView::Base.new
-    @_content_for = Hash.new {|h,k| h[k] = "" }
+    @view_flow = ActionView::OutputFlow.new
   end
 
   def test_capture_captures_the_temporary_output_buffer_in_its_block
@@ -15,7 +15,6 @@ class CaptureHelperTest < ActionView::TestCase
     end
     assert_nil @av.output_buffer
     assert_equal 'foobar', string
-    assert_kind_of ActionView::NonConcattingString, string
   end
 
   def test_capture_captures_the_value_returned_by_the_block_if_the_temporary_buffer_is_blank
@@ -23,18 +22,144 @@ class CaptureHelperTest < ActionView::TestCase
       a + b
     end
     assert_equal 'foobar', string
-    assert_kind_of ActionView::NonConcattingString, string
   end
 
   def test_capture_returns_nil_if_the_returned_value_is_not_a_string
     assert_nil @av.capture { 1 }
   end
 
-  def test_content_for
+  def test_capture_escapes_html
+    string = @av.capture { '<em>bar</em>' }
+    assert_equal '&lt;em&gt;bar&lt;/em&gt;', string
+  end
+
+  def test_capture_doesnt_escape_twice
+    string = @av.capture { '&lt;em&gt;bar&lt;/em&gt;'.html_safe }
+    assert_equal '&lt;em&gt;bar&lt;/em&gt;', string
+  end
+
+  def test_capture_used_for_read
+    content_for :foo, "foo"
+    assert_equal "foo", content_for(:foo)
+
+    content_for(:bar){ "bar" }
+    assert_equal "bar", content_for(:bar)
+  end
+
+  def test_content_for_with_multiple_calls
+    assert ! content_for?(:title)
+    content_for :title, 'foo'
+    content_for :title, 'bar'
+    assert_equal 'foobar', content_for(:title)
+  end
+
+  def test_content_for_with_multiple_calls_and_flush
+    assert ! content_for?(:title)
+    content_for :title, 'foo'
+    content_for :title, 'bar', flush: true
+    assert_equal 'bar', content_for(:title)
+  end
+
+  def test_content_for_with_block
+    assert ! content_for?(:title)
+    content_for :title do
+      output_buffer << 'foo'
+      output_buffer << 'bar'
+      nil
+    end
+    assert_equal 'foobar', content_for(:title)
+  end
+
+  def test_content_for_with_block_and_multiple_calls_with_flush
+    assert ! content_for?(:title)
+    content_for :title do
+      'foo'
+    end
+    content_for :title, flush: true do
+      'bar'
+    end
+    assert_equal 'bar', content_for(:title)
+  end
+
+  def test_content_for_with_block_and_multiple_calls_with_flush_nil_content
+    assert ! content_for?(:title)
+    content_for :title do
+      'foo'
+    end
+    content_for :title, nil, flush: true do
+      'bar'
+    end
+    assert_equal 'bar', content_for(:title)
+  end
+
+  def test_content_for_with_block_and_multiple_calls_without_flush
+    assert ! content_for?(:title)
+    content_for :title do
+      'foo'
+    end
+    content_for :title, flush: false do
+      'bar'
+    end
+    assert_equal 'foobar', content_for(:title)
+  end
+
+  def test_content_for_with_whitespace_block
+    assert ! content_for?(:title)
+    content_for :title, 'foo'
+    content_for :title do
+      output_buffer << "  \n  "
+      nil
+    end
+    content_for :title, 'bar'
+    assert_equal 'foobar', content_for(:title)
+  end
+
+  def test_content_for_with_whitespace_block_and_flush
+    assert ! content_for?(:title)
+    content_for :title, 'foo'
+    content_for :title, flush: true do
+      output_buffer << "  \n  "
+      nil
+    end
+    content_for :title, 'bar', flush: true
+    assert_equal 'bar', content_for(:title)
+  end
+
+  def test_content_for_returns_nil_when_writing
+    assert ! content_for?(:title)
+    assert_equal nil, content_for(:title, 'foo')
+    assert_equal nil, content_for(:title) { output_buffer << 'bar'; nil }
+    assert_equal nil, content_for(:title) { output_buffer << "  \n  "; nil }
+    assert_equal 'foobar', content_for(:title)
+    assert_equal nil, content_for(:title, 'foo', flush: true)
+    assert_equal nil, content_for(:title, flush: true) { output_buffer << 'bar'; nil }
+    assert_equal nil, content_for(:title, flush: true) { output_buffer << "  \n  "; nil }
+    assert_equal 'bar', content_for(:title)
+  end
+
+  def test_content_for_returns_nil_when_content_missing
+    assert_equal nil, content_for(:some_missing_key)
+  end
+
+  def test_content_for_question_mark
     assert ! content_for?(:title)
     content_for :title, 'title'
     assert content_for?(:title)
     assert ! content_for?(:something_else)
+  end
+
+  def test_provide
+    assert !content_for?(:title)
+    provide :title, "hi"
+    assert content_for?(:title)
+    assert_equal "hi", content_for(:title)
+    provide :title, "<p>title</p>"
+    assert_equal "hi&lt;p&gt;title&lt;/p&gt;", content_for(:title)
+
+    @view_flow = ActionView::OutputFlow.new
+    provide :title, "hi"
+    provide :title, "<p>title</p>".html_safe
+    assert_equal "hi<p>title</p>", content_for(:title)
   end
 
   def test_with_output_buffer_swaps_the_output_buffer_given_no_argument
@@ -65,17 +190,15 @@ class CaptureHelperTest < ActionView::TestCase
     assert buffer.equal?(@av.output_buffer)
   end
 
-  unless RUBY_VERSION < '1.9'
-    def test_with_output_buffer_sets_proper_encoding
-      @av.output_buffer = ActionView::OutputBuffer.new
+  def test_with_output_buffer_sets_proper_encoding
+    @av.output_buffer = ActionView::OutputBuffer.new
 
-      # Ensure we set the output buffer to an encoding different than the default one.
-      alt_encoding = alt_encoding(@av.output_buffer)
-      @av.output_buffer.force_encoding(alt_encoding)
+    # Ensure we set the output buffer to an encoding different than the default one.
+    alt_encoding = alt_encoding(@av.output_buffer)
+    @av.output_buffer.force_encoding(alt_encoding)
 
-      @av.with_output_buffer do
-        assert_equal alt_encoding, @av.output_buffer.encoding
-      end
+    @av.with_output_buffer do
+      assert_equal alt_encoding, @av.output_buffer.encoding
     end
   end
 
@@ -99,14 +222,12 @@ class CaptureHelperTest < ActionView::TestCase
     assert_equal '', view.output_buffer
   end
 
-  unless RUBY_VERSION < '1.9'
-    def test_flush_output_buffer_preserves_the_encoding_of_the_output_buffer
-      view = view_with_controller
-      alt_encoding = alt_encoding(view.output_buffer)
-      view.output_buffer.force_encoding(alt_encoding)
-      flush_output_buffer
-      assert_equal alt_encoding, view.output_buffer.encoding
-    end
+  def test_flush_output_buffer_preserves_the_encoding_of_the_output_buffer
+    view = view_with_controller
+    alt_encoding = alt_encoding(view.output_buffer)
+    view.output_buffer.force_encoding(alt_encoding)
+    flush_output_buffer
+    assert_equal alt_encoding, view.output_buffer.encoding
   end
 
   def alt_encoding(output_buffer)
@@ -114,7 +235,7 @@ class CaptureHelperTest < ActionView::TestCase
   end
 
   def view_with_controller
-    returning(TestController.new.view_context) do |view|
+    TestController.new.view_context.tap do |view|
       view.output_buffer = ActionView::OutputBuffer.new
     end
   end

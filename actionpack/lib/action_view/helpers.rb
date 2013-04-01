@@ -6,24 +6,23 @@ module ActionView #:nodoc:
 
     autoload :ActiveModelHelper
     autoload :AssetTagHelper
+    autoload :AssetUrlHelper
     autoload :AtomFeedHelper
     autoload :CacheHelper
     autoload :CaptureHelper
+    autoload :ControllerHelper
     autoload :CsrfHelper
     autoload :DateHelper
     autoload :DebugHelper
-    autoload :DeprecatedBlockHelpers
     autoload :FormHelper
     autoload :FormOptionsHelper
     autoload :FormTagHelper
     autoload :JavaScriptHelper, "action_view/helpers/javascript_helper"
     autoload :NumberHelper
-    autoload :PrototypeHelper
-    autoload :RawOutputHelper
-    autoload :RecordIdentificationHelper
+    autoload :OutputSafetyHelper
     autoload :RecordTagHelper
+    autoload :RenderingHelper
     autoload :SanitizeHelper
-    autoload :ScriptaculousHelper
     autoload :TagHelper
     autoload :TextHelper
     autoload :TranslationHelper
@@ -31,16 +30,14 @@ module ActionView #:nodoc:
 
     extend ActiveSupport::Concern
 
-    included do
-      extend SanitizeHelper::ClassMethods
-    end
-
     include ActiveSupport::Benchmarkable
     include ActiveModelHelper
     include AssetTagHelper
+    include AssetUrlHelper
     include AtomFeedHelper
     include CacheHelper
     include CaptureHelper
+    include ControllerHelper
     include CsrfHelper
     include DateHelper
     include DebugHelper
@@ -49,12 +46,10 @@ module ActionView #:nodoc:
     include FormTagHelper
     include JavaScriptHelper
     include NumberHelper
-    include PrototypeHelper
-    include RawOutputHelper
-    include RecordIdentificationHelper
+    include OutputSafetyHelper
     include RecordTagHelper
+    include RenderingHelper
     include SanitizeHelper
-    include ScriptaculousHelper
     include TagHelper
     include TextHelper
     include TranslationHelper

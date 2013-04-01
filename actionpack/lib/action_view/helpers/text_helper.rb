@@ -1,19 +1,41 @@
-require 'active_support/core_ext/object/blank'
-require 'action_view/helpers/tag_helper'
+require 'active_support/core_ext/string/filters'
+require 'active_support/core_ext/array/extract_options'
 
 module ActionView
+  # = Action View Text Helpers
   module Helpers #:nodoc:
     # The TextHelper module provides a set of methods for filtering, formatting
     # and transforming strings, which can reduce the amount of inline Ruby code in
-    # your views. These helper methods extend ActionView making them callable
+    # your views. These helper methods extend Action View making them callable
     # within your template files.
+    #
+    # ==== Sanitization
+    #
+    # Most text helpers by default sanitize the given content, but do not escape it.
+    # This means HTML tags will appear in the page but all malicious code will be removed.
+    # Let's look at some examples using the +simple_format+ method:
+    #
+    #   simple_format('<a href="http://example.com/">Example</a>')
+    #   # => "<p><a href=\"http://example.com/\">Example</a></p>"
+    #
+    #   simple_format('<a href="javascript:alert(\'no!\')">Example</a>')
+    #   # => "<p><a>Example</a></p>"
+    #
+    # If you want to escape all content, you should invoke the +h+ method before
+    # calling the text helper.
+    #
+    #   simple_format h('<a href="http://example.com/">Example</a>')
+    #   # => "<p>&lt;a href=\"http://example.com/\"&gt;Example&lt;/a&gt;</p>"
     module TextHelper
+      extend ActiveSupport::Concern
+
+      include SanitizeHelper
+      include TagHelper
       # The preferred method of outputting text in your views is to use the
       # <%= "text" %> eRuby syntax. The regular _puts_ and _print_ methods
       # do not operate as expected in an eRuby code block. If you absolutely must
       # output text within a non-output code block (i.e., <% %>), you can use the concat method.
       #
-      # ==== Examples
       #   <%
       #       concat "hello"
       #       # is the equivalent of <%= "hello" %>
@@ -21,7 +43,7 @@ module ActionView
       #       if logged_in
       #         concat "Logged in!"
       #       else
-      #         concat link_to('login', :action => login)
+      #         concat link_to('login', action: :login)
       #       end
       #       # will either display "Logged in!" or a login link
       #   %>
@@ -39,143 +61,121 @@ module ActionView
       #
       # Pass a <tt>:separator</tt> to truncate +text+ at a natural break.
       #
-      # ==== Examples
+      # Pass a block if you want to show extra content when the text is truncated.
+      #
+      # The result is marked as HTML-safe, but it is escaped by default, unless <tt>:escape</tt> is
+      # +false+. Care should be taken if +text+ contains HTML tags or entities, because truncation
+      # may produce invalid HTML (such as unbalanced or incomplete tags).
       #
       #   truncate("Once upon a time in a world far far away")
-      #   # => Once upon a time in a world...
+      #   # => "Once upon a time in a world..."
       #
-      #   truncate("Once upon a time in a world far far away", :separator => ' ')
-      #   # => Once upon a time in a world...
+      #   truncate("Once upon a time in a world far far away", length: 17)
+      #   # => "Once upon a ti..."
       #
-      #   truncate("Once upon a time in a world far far away", :length => 14)
-      #   # => Once upon a...
+      #   truncate("Once upon a time in a world far far away", length: 17, separator: ' ')
+      #   # => "Once upon a..."
       #
-      #   truncate("And they found that many people were sleeping better.", :length => 25, "(clipped)")
-      #   # => And they found t(clipped)
+      #   truncate("And they found that many people were sleeping better.", length: 25, omission: '... (continued)')
+      #   # => "And they f... (continued)"
       #
-      #   truncate("And they found that many people were sleeping better.", :omission => "... (continued)", :length => 25)
-      #   # => And they f... (continued)
+      #   truncate("<p>Once upon a time in a world far far away</p>")
+      #   # => "<p>Once upon a time in a wo..."
       #
-      # You can still use <tt>truncate</tt> with the old API that accepts the
-      # +length+ as its optional second and the +ellipsis+ as its
-      # optional third parameter:
-      #   truncate("Once upon a time in a world far far away", 14)
-      #   # => Once upon a...
-      #
-      #   truncate("And they found that many people were sleeping better.", 25, "... (continued)")
-      #   # => And they f... (continued)
-      def truncate(text, *args)
-        options = args.extract_options!
-        unless args.empty?
-          ActiveSupport::Deprecation.warn('truncate takes an option hash instead of separate ' +
-            'length and omission arguments', caller)
-
-          options[:length] = args[0] || 30
-          options[:omission] = args[1] || "..."
-        end
-        options.reverse_merge!(:length => 30, :omission => "...")
-
+      #   truncate("Once upon a time in a world far far away") { link_to "Continue", "#" }
+      #   # => "Once upon a time in a wo...<a href="#">Continue</a>"
+      def truncate(text, options = {}, &block)
         if text
-          l = options[:length] - options[:omission].mb_chars.length
-          chars = text.mb_chars
-          stop = options[:separator] ? (chars.rindex(options[:separator].mb_chars, l) || l) : l
-          (chars.length > options[:length] ? chars[0...stop] + options[:omission] : text).to_s
+          length  = options.fetch(:length, 30)
+
+          content = text.truncate(length, options)
+          content = options[:escape] == false ? content.html_safe : ERB::Util.html_escape(content)
+          content << capture(&block) if block_given? && text.length > length
+          content
         end
       end
 
       # Highlights one or more +phrases+ everywhere in +text+ by inserting it into
       # a <tt>:highlighter</tt> string. The highlighter can be specialized by passing <tt>:highlighter</tt>
-      # as a single-quoted string with \1 where the phrase is to be inserted (defaults to
-      # '<strong class="highlight">\1</strong>')
+      # as a single-quoted string with <tt>\1</tt> where the phrase is to be inserted (defaults to
+      # '<mark>\1</mark>')
       #
-      # ==== Examples
       #   highlight('You searched for: rails', 'rails')
-      #   # => You searched for: <strong class="highlight">rails</strong>
+      #   # => You searched for: <mark>rails</mark>
       #
       #   highlight('You searched for: ruby, rails, dhh', 'actionpack')
       #   # => You searched for: ruby, rails, dhh
       #
-      #   highlight('You searched for: rails', ['for', 'rails'], :highlighter => '<em>\1</em>')
+      #   highlight('You searched for: rails', ['for', 'rails'], highlighter: '<em>\1</em>')
       #   # => You searched <em>for</em>: <em>rails</em>
       #
-      #   highlight('You searched for: rails', 'rails', :highlighter => '<a href="search?q=\1">\1</a>')
+      #   highlight('You searched for: rails', 'rails', highlighter: '<a href="search?q=\1">\1</a>')
       #   # => You searched for: <a href="search?q=rails">rails</a>
-      #
-      # You can still use <tt>highlight</tt> with the old API that accepts the
-      # +highlighter+ as its optional third parameter:
-      #   highlight('You searched for: rails', 'rails', '<a href="search?q=\1">\1</a>')     # => You searched for: <a href="search?q=rails">rails</a>
-      def highlight(text, phrases, *args)
-        options = args.extract_options!
-        unless args.empty?
-          options[:highlighter] = args[0] || '<strong class="highlight">\1</strong>'
-        end
-        options.reverse_merge!(:highlighter => '<strong class="highlight">\1</strong>')
+      def highlight(text, phrases, options = {})
+        text = sanitize(text) if options.fetch(:sanitize, true)
 
         if text.blank? || phrases.blank?
           text
         else
+          highlighter = options.fetch(:highlighter, '<mark>\1</mark>')
           match = Array(phrases).map { |p| Regexp.escape(p) }.join('|')
-          text.gsub(/(#{match})(?!(?:[^<]*?)(?:["'])[^<>]*>)/i, options[:highlighter])
-        end
+          text.gsub(/(#{match})(?![^<]*?>)/i, highlighter)
+        end.html_safe
       end
 
       # Extracts an excerpt from +text+ that matches the first instance of +phrase+.
       # The <tt>:radius</tt> option expands the excerpt on each side of the first occurrence of +phrase+ by the number of characters
       # defined in <tt>:radius</tt> (which defaults to 100). If the excerpt radius overflows the beginning or end of the +text+,
-      # then the <tt>:omission</tt> option (which defaults to "...") will be prepended/appended accordingly. The resulting string
-      # will be stripped in any case. If the +phrase+ isn't found, nil is returned.
+      # then the <tt>:omission</tt> option (which defaults to "...") will be prepended/appended accordingly. The
+      # <tt>:separator</tt> enable to choose the delimation. The resulting string will be stripped in any case. If the +phrase+
+      # isn't found, nil is returned.
       #
-      # ==== Examples
-      #   excerpt('This is an example', 'an', :radius => 5)
+      #   excerpt('This is an example', 'an', radius: 5)
       #   # => ...s is an exam...
       #
-      #   excerpt('This is an example', 'is', :radius => 5)
+      #   excerpt('This is an example', 'is', radius: 5)
       #   # => This is a...
       #
       #   excerpt('This is an example', 'is')
       #   # => This is an example
       #
-      #   excerpt('This next thing is an example', 'ex', :radius => 2)
+      #   excerpt('This next thing is an example', 'ex', radius: 2)
       #   # => ...next...
       #
-      #   excerpt('This is also an example', 'an', :radius => 8, :omission => '<chop> ')
+      #   excerpt('This is also an example', 'an', radius: 8, omission: '<chop> ')
       #   # => <chop> is also an example
       #
-      # You can still use <tt>excerpt</tt> with the old API that accepts the
-      # +radius+ as its optional third and the +ellipsis+ as its
-      # optional forth parameter:
-      #   excerpt('This is an example', 'an', 5)                   # => ...s is an exam...
-      #   excerpt('This is also an example', 'an', 8, '<chop> ')   # => <chop> is also an example
-      def excerpt(text, phrase, *args)
-        options = args.extract_options!
-        unless args.empty?
-          options[:radius] = args[0] || 100
-          options[:omission] = args[1] || "..."
-        end
-        options.reverse_merge!(:radius => 100, :omission => "...")
+      #   excerpt('This is a very beautiful morning', 'very', separator:  ' ', radius: 1)
+      #   # => ...a very beautiful...
+      def excerpt(text, phrase, options = {})
+        return unless text && phrase
 
-        if text && phrase
-          phrase = Regexp.escape(phrase)
+        separator = options.fetch(:separator, "")
+        phrase    = Regexp.escape(phrase)
+        regex     = /#{phrase}/i
 
-          if found_pos = text.mb_chars =~ /(#{phrase})/i
-            start_pos = [ found_pos - options[:radius], 0 ].max
-            end_pos   = [ [ found_pos + phrase.mb_chars.length + options[:radius] - 1, 0].max, text.mb_chars.length ].min
+        return unless matches = text.match(regex)
+        phrase = matches[0]
 
-            prefix  = start_pos > 0 ? options[:omission] : ""
-            postfix = end_pos < text.mb_chars.length - 1 ? options[:omission] : ""
-
-            prefix + text.mb_chars[start_pos..end_pos].strip + postfix
-          else
-            nil
+        text.split(separator).each do |value|
+          if value.match(regex)
+            regex = phrase = value
+            break
           end
         end
+
+        first_part, second_part = text.split(regex, 2)
+
+        prefix, first_part   = cut_excerpt_part(:first, first_part, separator, options)
+        postfix, second_part = cut_excerpt_part(:second, second_part, separator, options)
+
+        prefix + (first_part + separator + phrase + separator + second_part).strip + postfix
       end
 
       # Attempts to pluralize the +singular+ word unless +count+ is 1. If
       # +plural+ is supplied, it will use that when count is > 1, otherwise
-      # it will use the Inflector to determine the plural form
+      # it will use the Inflector to determine the plural form.
       #
-      # ==== Examples
       #   pluralize(1, 'person')
       #   # => 1 person
       #
@@ -188,121 +188,36 @@ module ActionView
       #   pluralize(0, 'person')
       #   # => 0 people
       def pluralize(count, singular, plural = nil)
-        "#{count || 0} " + ((count == 1 || count =~ /^1(\.0+)?$/) ? singular : (plural || singular.pluralize))
+        word = if (count == 1 || count =~ /^1(\.0+)?$/)
+          singular
+        else
+          plural || singular.pluralize
+        end
+
+        "#{count || 0} #{word}"
       end
 
       # Wraps the +text+ into lines no longer than +line_width+ width. This method
       # breaks on the first whitespace character that does not exceed +line_width+
       # (which is 80 by default).
       #
-      # ==== Examples
-      #
       #   word_wrap('Once upon a time')
       #   # => Once upon a time
       #
       #   word_wrap('Once upon a time, in a kingdom called Far Far Away, a king fell ill, and finding a successor to the throne turned out to be more trouble than anyone could have imagined...')
-      #   # => Once upon a time, in a kingdom called Far Far Away, a king fell ill, and finding\n a successor to the throne turned out to be more trouble than anyone could have\n imagined...
+      #   # => Once upon a time, in a kingdom called Far Far Away, a king fell ill, and finding\na successor to the throne turned out to be more trouble than anyone could have\nimagined...
       #
-      #   word_wrap('Once upon a time', :line_width => 8)
-      #   # => Once upon\na time
+      #   word_wrap('Once upon a time', line_width: 8)
+      #   # => Once\nupon a\ntime
       #
-      #   word_wrap('Once upon a time', :line_width => 1)
+      #   word_wrap('Once upon a time', line_width: 1)
       #   # => Once\nupon\na\ntime
-      #
-      # You can still use <tt>word_wrap</tt> with the old API that accepts the
-      # +line_width+ as its optional second parameter:
-      #   word_wrap('Once upon a time', 8)     # => Once upon\na time
-      def word_wrap(text, *args)
-        options = args.extract_options!
-        unless args.blank?
-          options[:line_width] = args[0] || 80
-        end
-        options.reverse_merge!(:line_width => 80)
+      def word_wrap(text, options = {})
+        line_width = options.fetch(:line_width, 80)
 
         text.split("\n").collect do |line|
-          line.length > options[:line_width] ? line.gsub(/(.{1,#{options[:line_width]}})(\s+|$)/, "\\1\n").strip : line
+          line.length > line_width ? line.gsub(/(.{1,#{line_width}})(\s+|$)/, "\\1\n").strip : line
         end * "\n"
-      end
-
-      # Returns the text with all the Textile[http://www.textism.com/tools/textile] codes turned into HTML tags.
-      #
-      # You can learn more about Textile's syntax at its website[http://www.textism.com/tools/textile].
-      # <i>This method is only available if RedCloth[http://redcloth.org/] is available</i>.
-      #
-      # ==== Examples
-      #   textilize("*This is Textile!*  Rejoice!")
-      #   # => "<p><strong>This is Textile!</strong>  Rejoice!</p>"
-      #
-      #   textilize("I _love_ ROR(Ruby on Rails)!")
-      #   # => "<p>I <em>love</em> <acronym title="Ruby on Rails">ROR</acronym>!</p>"
-      #
-      #   textilize("h2. Textile makes markup -easy- simple!")
-      #   # => "<h2>Textile makes markup <del>easy</del> simple!</h2>"
-      #
-      #   textilize("Visit the Rails website "here":http://www.rubyonrails.org/.)
-      #   # => "<p>Visit the Rails website <a href="http://www.rubyonrails.org/">here</a>.</p>"
-      #
-      #   textilize("This is worded <strong>strongly</strong>")
-      #   # => "<p>This is worded <strong>strongly</strong></p>"
-      #
-      #   textilize("This is worded <strong>strongly</strong>", :filter_html)
-      #   # => "<p>This is worded &lt;strong&gt;strongly&lt;/strong&gt;</p>"
-      #
-      def textilize(text, *options)
-        options ||= [:hard_breaks]
-
-        if text.blank?
-          ""
-        else
-          textilized = RedCloth.new(text, options)
-          textilized.to_html
-        end
-      end
-
-      # Returns the text with all the Textile codes turned into HTML tags,
-      # but without the bounding <p> tag that RedCloth adds.
-      #
-      # You can learn more about Textile's syntax at its website[http://www.textism.com/tools/textile].
-      # <i>This method is only available if RedCloth[http://redcloth.org/] is available</i>.
-      #
-      # ==== Examples
-      #   textilize_without_paragraph("*This is Textile!*  Rejoice!")
-      #   # => "<strong>This is Textile!</strong>  Rejoice!"
-      #
-      #   textilize_without_paragraph("I _love_ ROR(Ruby on Rails)!")
-      #   # => "I <em>love</em> <acronym title="Ruby on Rails">ROR</acronym>!"
-      #
-      #   textilize_without_paragraph("h2. Textile makes markup -easy- simple!")
-      #   # => "<h2>Textile makes markup <del>easy</del> simple!</h2>"
-      #
-      #   textilize_without_paragraph("Visit the Rails website "here":http://www.rubyonrails.org/.)
-      #   # => "Visit the Rails website <a href="http://www.rubyonrails.org/">here</a>."
-      def textilize_without_paragraph(text)
-        textiled = textilize(text)
-        if textiled[0..2] == "<p>" then textiled = textiled[3..-1] end
-        if textiled[-4..-1] == "</p>" then textiled = textiled[0..-5] end
-        return textiled
-      end
-
-      # Returns the text with all the Markdown codes turned into HTML tags.
-      # <i>This method requires BlueCloth[http://www.deveiate.org/projects/BlueCloth]
-      # to be available</i>.
-      #
-      # ==== Examples
-      #   markdown("We are using __Markdown__ now!")
-      #   # => "<p>We are using <strong>Markdown</strong> now!</p>"
-      #
-      #   markdown("We like to _write_ `code`, not just _read_ it!")
-      #   # => "<p>We like to <em>write</em> <code>code</code>, not just <em>read</em> it!</p>"
-      #
-      #   markdown("The [Markdown website](http://daringfireball.net/projects/markdown/) has more information.")
-      #   # => "<p>The <a href="http://daringfireball.net/projects/markdown/">Markdown website</a>
-      #   #     has more information.</p>"
-      #
-      #   markdown('![The ROR logo](http://rubyonrails.com/images/rails.png "Ruby on Rails")')
-      #   # => '<p><img src="http://rubyonrails.com/images/rails.png" alt="The ROR logo" title="Ruby on Rails" /></p>'
-      def markdown(text)
-        text.blank? ? "" : BlueCloth.new(text).to_html
       end
 
       # Returns +text+ transformed into HTML using simple formatting rules.
@@ -311,100 +226,61 @@ module ActionView
       # considered as a linebreak and a <tt><br /></tt> tag is appended. This
       # method does not remove the newlines from the +text+.
       #
-      # You can pass any HTML attributes into <tt>html_options</tt>.  These
+      # You can pass any HTML attributes into <tt>html_options</tt>. These
       # will be added to all created paragraphs.
+      #
+      # ==== Options
+      # * <tt>:sanitize</tt> - If +false+, does not sanitize +text+.
+      # * <tt>:wrapper_tag</tt> - String representing the wrapper tag, defaults to <tt>"p"</tt>
+      #
       # ==== Examples
       #   my_text = "Here is some basic text...\n...with a line break."
       #
       #   simple_format(my_text)
       #   # => "<p>Here is some basic text...\n<br />...with a line break.</p>"
       #
+      #   simple_format(my_text, {}, wrapper_tag: "div")
+      #   # => "<div>Here is some basic text...\n<br />...with a line break.</div>"
+      #
       #   more_text = "We want to put a paragraph...\n\n...right there."
       #
       #   simple_format(more_text)
       #   # => "<p>We want to put a paragraph...</p>\n\n<p>...right there.</p>"
       #
-      #   simple_format("Look ma! A class!", :class => 'description')
+      #   simple_format("Look ma! A class!", class: 'description')
       #   # => "<p class='description'>Look ma! A class!</p>"
-      def simple_format(text, html_options={})
-        start_tag = tag('p', html_options, true)
-        text = h(text)
-        text.gsub!(/\r\n?/, "\n")                    # \r\n and \r -> \n
-        text.gsub!(/\n\n+/, "</p>\n\n#{start_tag}")  # 2+ newline  -> paragraph
-        text.gsub!(/([^\n]\n)(?=[^\n])/, '\1<br />') # 1 newline   -> br
-        text.insert 0, start_tag
-        text.safe_concat("</p>")
-      end
+      #
+      #   simple_format("<span>I'm allowed!</span> It's true.", {}, sanitize: false)
+      #   # => "<p><span>I'm allowed!</span> It's true.</p>"
+      def simple_format(text, html_options = {}, options = {})
+        wrapper_tag = options.fetch(:wrapper_tag, :p)
 
-      # Turns all URLs and e-mail addresses into clickable links. The <tt>:link</tt> option
-      # will limit what should be linked. You can add HTML attributes to the links using
-      # <tt>:html</tt>. Possible values for <tt>:link</tt> are <tt>:all</tt> (default),
-      # <tt>:email_addresses</tt>, and <tt>:urls</tt>. If a block is given, each URL and
-      # e-mail address is yielded and the result is used as the link text.
-      #
-      # ==== Examples
-      #   auto_link("Go to http://www.rubyonrails.org and say hello to david@loudthinking.com")
-      #   # => "Go to <a href=\"http://www.rubyonrails.org\">http://www.rubyonrails.org</a> and
-      #   #     say hello to <a href=\"mailto:david@loudthinking.com\">david@loudthinking.com</a>"
-      #
-      #   auto_link("Visit http://www.loudthinking.com/ or e-mail david@loudthinking.com", :link => :urls)
-      #   # => "Visit <a href=\"http://www.loudthinking.com/\">http://www.loudthinking.com/</a>
-      #   #     or e-mail david@loudthinking.com"
-      #
-      #   auto_link("Visit http://www.loudthinking.com/ or e-mail david@loudthinking.com", :link => :email_addresses)
-      #   # => "Visit http://www.loudthinking.com/ or e-mail <a href=\"mailto:david@loudthinking.com\">david@loudthinking.com</a>"
-      #
-      #   post_body = "Welcome to my new blog at http://www.myblog.com/.  Please e-mail me at me@email.com."
-      #   auto_link(post_body, :html => { :target => '_blank' }) do |text|
-      #     truncate(text, 15)
-      #   end
-      #   # => "Welcome to my new blog at <a href=\"http://www.myblog.com/\" target=\"_blank\">http://www.m...</a>.
-      #         Please e-mail me at <a href=\"mailto:me@email.com\">me@email.com</a>."
-      #
-      #
-      # You can still use <tt>auto_link</tt> with the old API that accepts the
-      # +link+ as its optional second parameter and the +html_options+ hash
-      # as its optional third parameter:
-      #   post_body = "Welcome to my new blog at http://www.myblog.com/. Please e-mail me at me@email.com."
-      #   auto_link(post_body, :urls)     # => Once upon\na time
-      #   # => "Welcome to my new blog at <a href=\"http://www.myblog.com/\">http://www.myblog.com</a>.
-      #         Please e-mail me at me@email.com."
-      #
-      #   auto_link(post_body, :all, :target => "_blank")     # => Once upon\na time
-      #   # => "Welcome to my new blog at <a href=\"http://www.myblog.com/\" target=\"_blank\">http://www.myblog.com</a>.
-      #         Please e-mail me at <a href=\"mailto:me@email.com\">me@email.com</a>."
-      def auto_link(text, *args, &block)#link = :all, html = {}, &block)
-        return '' if text.blank?
+        text = sanitize(text) if options.fetch(:sanitize, true)
+        paragraphs = split_paragraphs(text)
 
-        options = args.size == 2 ? {} : args.extract_options! # this is necessary because the old auto_link API has a Hash as its last parameter
-        unless args.empty?
-          options[:link] = args[0] || :all
-          options[:html] = args[1] || {}
-        end
-        options.reverse_merge!(:link => :all, :html => {})
-
-        case options[:link].to_sym
-          when :all                         then auto_link_email_addresses(auto_link_urls(text, options[:html], &block), options[:html], &block)
-          when :email_addresses             then auto_link_email_addresses(text, options[:html], &block)
-          when :urls                        then auto_link_urls(text, options[:html], &block)
+        if paragraphs.empty?
+          content_tag(wrapper_tag, nil, html_options)
+        else
+          paragraphs.map { |paragraph|
+            content_tag(wrapper_tag, paragraph, html_options, options[:sanitize])
+          }.join("\n\n").html_safe
         end
       end
 
       # Creates a Cycle object whose _to_s_ method cycles through elements of an
       # array every time it is called. This can be used for example, to alternate
-      # classes for table rows.  You can use named cycles to allow nesting in loops.
+      # classes for table rows. You can use named cycles to allow nesting in loops.
       # Passing a Hash as the last parameter with a <tt>:name</tt> key will create a
       # named cycle. The default name for a cycle without a +:name+ key is
       # <tt>"default"</tt>. You can manually reset a cycle by calling reset_cycle
       # and passing the name of the cycle. The current cycle string can be obtained
       # anytime using the current_cycle method.
       #
-      # ==== Examples
       #   # Alternate CSS classes for even and odd numbers...
       #   @items = [1,2,3,4]
       #   <table>
       #   <% @items.each do |item| %>
-      #     <tr class="<%= cycle("even", "odd") -%>">
+      #     <tr class="<%= cycle("odd", "even") -%>">
       #       <td>item</td>
       #     </tr>
       #   <% end %>
@@ -412,15 +288,15 @@ module ActionView
       #
       #
       #   # Cycle CSS classes for rows, and text colors for values within each row
-      #   @items = x = [{:first => 'Robert', :middle => 'Daniel', :last => 'James'},
-      #                {:first => 'Emily', :middle => 'Shannon', :maiden => 'Pike', :last => 'Hicks'},
-      #               {:first => 'June', :middle => 'Dae', :last => 'Jones'}]
+      #   @items = x = [{first: 'Robert', middle: 'Daniel', last: 'James'},
+      #                {first: 'Emily', middle: 'Shannon', maiden: 'Pike', last: 'Hicks'},
+      #               {first: 'June', middle: 'Dae', last: 'Jones'}]
       #   <% @items.each do |item| %>
-      #     <tr class="<%= cycle("odd", "even", :name => "row_class") -%>">
+      #     <tr class="<%= cycle("odd", "even", name: "row_class") -%>">
       #       <td>
       #         <% item.values.each do |value| %>
       #           <%# Create a named cycle "colors" %>
-      #           <span style="color:<%= cycle("red", "green", "blue", :name => "colors") -%>">
+      #           <span style="color:<%= cycle("red", "green", "blue", name: "colors") -%>">
       #             <%= value %>
       #           </span>
       #         <% end %>
@@ -429,26 +305,22 @@ module ActionView
       #    </tr>
       #  <% end %>
       def cycle(first_value, *values)
-        if (values.last.instance_of? Hash)
-          params = values.pop
-          name = params[:name]
-        else
-          name = "default"
-        end
+        options = values.extract_options!
+        name = options.fetch(:name, 'default')
+
         values.unshift(first_value)
 
         cycle = get_cycle(name)
-        if (cycle.nil? || cycle.values != values)
+        unless cycle && cycle.values == values
           cycle = set_cycle(name, Cycle.new(*values))
         end
-        return cycle.to_s
+        cycle.to_s
       end
 
       # Returns the current cycle string after a cycle has been started. Useful
       # for complex table highlighting or any other design need which requires
       # the current cycle string in more than one place.
       #
-      # ==== Example
       #   # Alternate background colors
       #   @items = [1,2,3,4]
       #   <% @items.each do |item| %>
@@ -458,20 +330,19 @@ module ActionView
       #   <% end %>
       def current_cycle(name = "default")
         cycle = get_cycle(name)
-        cycle.current_value unless cycle.nil?
+        cycle.current_value if cycle
       end
 
       # Resets a cycle so that it starts from the first element the next time
       # it is called. Pass in +name+ to reset a named cycle.
       #
-      # ==== Example
       #   # Alternate CSS classes for even and odd numbers...
       #   @items = [[1,2,3,4], [5,6,3], [3,4,5,6,7,4]]
       #   <table>
       #   <% @items.each do |item| %>
       #     <tr class="<%= cycle("even", "odd") -%>">
       #         <% item.each do |value| %>
-      #           <span style="color:<%= cycle("#333", "#666", "#999", :name => "colors") -%>">
+      #           <span style="color:<%= cycle("#333", "#666", "#999", name: "colors") -%>">
       #             <%= value %>
       #           </span>
       #         <% end %>
@@ -482,7 +353,7 @@ module ActionView
       #   </table>
       def reset_cycle(name = "default")
         cycle = get_cycle(name)
-        cycle.reset unless cycle.nil?
+        cycle.reset if cycle
       end
 
       class Cycle #:nodoc:
@@ -536,57 +407,32 @@ module ActionView
           @_cycles[name] = cycle_object
         end
 
-        AUTO_LINK_RE = %r{
-            ( https?:// | www\. )
-            [^\s<]+
-          }x unless const_defined?(:AUTO_LINK_RE)
+        def split_paragraphs(text)
+          return [] if text.blank?
 
-        BRACKETS = { ']' => '[', ')' => '(', '}' => '{' }
-
-        # Turns all urls into clickable links.  If a block is given, each url
-        # is yielded and the result is used as the link text.
-        def auto_link_urls(text, html_options = {})
-          link_attributes = html_options.stringify_keys
-          text.gsub(AUTO_LINK_RE) do
-            href = $&
-            punctuation = []
-            left, right = $`, $'
-            # detect already linked URLs and URLs in the middle of a tag
-            if left =~ /<[^>]+$/ && right =~ /^[^>]*>/
-              # do not change string; URL is already linked
-              href
-            else
-              # don't include trailing punctuation character as part of the URL
-              while href.sub!(/[^\w\/-]$/, '')
-                punctuation.push $&
-                if opening = BRACKETS[punctuation.last] and href.scan(opening).size > href.scan(punctuation.last).size
-                  href << punctuation.pop
-                  break
-                end
-              end
-
-              link_text = block_given?? yield(href) : href
-              href = 'http://' + href unless href =~ %r{^[a-z]+://}i
-
-              content_tag(:a, h(link_text), link_attributes.merge('href' => href)) + punctuation.reverse.join('')
-            end
+          text.to_str.gsub(/\r\n?/, "\n").split(/\n\n+/).map! do |t|
+            t.gsub!(/([^\n]\n)(?=[^\n])/, '\1<br />') || t
           end
         end
 
-        # Turns all email addresses into clickable links.  If a block is given,
-        # each email is yielded and the result is used as the link text.
-        def auto_link_email_addresses(text, html_options = {})
-          body = text.dup
-          text.gsub(/([\w\.!#\$%\-+]+@[A-Za-z0-9\-]+(\.[A-Za-z0-9\-]+)+)/) do
-            text = $1
+        def cut_excerpt_part(part_position, part, separator, options)
+          return "", "" unless part
 
-            if body.match(/<a\b[^>]*>(.*)(#{Regexp.escape(text)})(.*)<\/a>/)
-              text
-            else
-              display_text = (block_given?) ? yield(text) : text
-              mail_to text, display_text, html_options
-            end
+          radius   = options.fetch(:radius, 100)
+          omission = options.fetch(:omission, "...")
+
+          part = part.split(separator)
+          part.delete("")
+          affix = part.size > radius ? omission : ""
+
+          part = if part_position == :first
+            drop_index = [part.length - radius, 0].max
+            part.drop(drop_index)
+          else
+            part.first(radius)
           end
+
+          return affix, part.join(separator)
         end
     end
   end

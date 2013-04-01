@@ -1,35 +1,28 @@
 require 'abstract_unit'
-require 'action_controller/vendor/html-scanner'
+require 'action_view/vendor/html-scanner'
 require 'controller/fake_controllers'
 
-# a controller class to facilitate the tests
 class ActionPackAssertionsController < ActionController::Base
 
-  # this does absolutely nothing
   def nothing() head :ok end
 
-  # a standard template
   def hello_world() render :template => "test/hello_world"; end
+  def hello_repeating_in_path() render :template => "test/hello/hello"; end
 
-  # a standard template
   def hello_xml_world() render :template => "test/hello_xml_world"; end
 
-  # a standard template rendering PDF
   def hello_xml_world_pdf
     self.content_type = "application/pdf"
     render :template => "test/hello_xml_world"
   end
 
-  # a standard template rendering PDF
   def hello_xml_world_pdf_header
     response.headers["Content-Type"] = "application/pdf; charset=utf-8"
     render :template => "test/hello_xml_world"
   end
 
-  # a standard partial
   def partial() render :partial => 'test/partial'; end
 
-  # a redirect to an internal location
   def redirect_internal() redirect_to "/nothing"; end
 
   def redirect_to_action() redirect_to :action => "flash_me", :id => 1, :params => { "panda" => "fun" }; end
@@ -40,33 +33,28 @@ class ActionPackAssertionsController < ActionController::Base
 
   def redirect_to_path() redirect_to '/some/path' end
 
+  def redirect_invalid_external_route() redirect_to 'ht_tp://www.rubyonrails.org' end
+
   def redirect_to_named_route() redirect_to route_one_url end
 
-  # a redirect to an external location
   def redirect_external() redirect_to "http://www.rubyonrails.org"; end
 
-  # a 404
   def response404() head '404 AWOL' end
 
-  # a 500
   def response500() head '500 Sorry' end
 
-  # a fictional 599
   def response599() head '599 Whoah!' end
 
-  # putting stuff in the flash
   def flash_me
     flash['hello'] = 'my name is inigo montoya...'
     render :text => "Inconceivable!"
   end
 
-  # we have a flash, but nothing is in it
   def flash_me_naked
     flash.clear
     render :text => "wow!"
   end
 
-  # assign some template instance variables
   def assign_this
     @howdy = "ho"
     render :inline => "Mr. Henke"
@@ -84,61 +72,38 @@ class ActionPackAssertionsController < ActionController::Base
     render :text => "Hello!", :content_type => Mime::RSS
   end
 
-  # puts something in the session
+  def render_with_layout
+    @variable_for_layout = nil
+    render "test/hello_world", :layout => "layouts/standard"
+  end
+
+  def render_with_layout_and_partial
+    @variable_for_layout = nil
+    render "test/hello_world_with_partial", :layout => "layouts/standard"
+  end
+
   def session_stuffing
     session['xmas'] = 'turkey'
     render :text => "ho ho ho"
   end
 
-  # raises exception on get requests
-  def raise_on_get
+  def raise_exception_on_get
     raise "get" if request.get?
     render :text => "request method: #{request.env['REQUEST_METHOD']}"
   end
 
-  # raises exception on post requests
-  def raise_on_post
+  def raise_exception_on_post
     raise "post" if request.post?
     render :text => "request method: #{request.env['REQUEST_METHOD']}"
   end
 
-  def get_valid_record
-    @record = Class.new do
-      def valid?
-        true
-      end
-
-      def errors
-        Class.new do
-           def full_messages; []; end
-        end.new
-      end
-
-    end.new
-
-    render :nothing => true
+  def render_file_absolute_path
+    render :file => File.expand_path('../../../README.rdoc', __FILE__)
   end
 
-
-  def get_invalid_record
-    @record = Class.new do
-
-      def valid?
-        false
-      end
-
-      def errors
-        Class.new do
-           def full_messages; ['...stuff...']; end
-        end.new
-      end
-    end.new
-
-    render :nothing => true
+  def render_file_relative_path
+    render :file => 'README.rdoc'
   end
-
-  # 911
-  def rescue_action(e) raise; end
 end
 
 # Used to test that assert_response includes the exception message
@@ -152,9 +117,6 @@ class AssertResponseWithUnexpectedErrorController < ActionController::Base
   def show
     render :text => "Boom", :status => 500
   end
-end
-
-class UserController < ActionController::Base
 end
 
 module Admin
@@ -181,69 +143,67 @@ module Admin
   end
 end
 
-# require "action_dispatch/test_process"
-
-# a test case to exercise the new capabilities TestRequest & TestResponse
 class ActionPackAssertionsControllerTest < ActionController::TestCase
-  # -- assertion-based testing ------------------------------------------------
 
   def test_assert_tag_and_url_for
     get :render_url
     assert_tag :content => "/action_pack_assertions/flash_me"
   end
 
-  # test the get method, make sure the request really was a get
-  def test_get
-    assert_raise(RuntimeError) { get :raise_on_get }
-    get :raise_on_post
+  def test_render_file_absolute_path
+    get :render_file_absolute_path
+    assert_match(/\A= Action Pack/, @response.body)
+  end
+
+  def test_render_file_relative_path
+    get :render_file_relative_path
+    assert_match(/\A= Action Pack/, @response.body)
+  end
+
+  def test_get_request
+    assert_raise(RuntimeError) { get :raise_exception_on_get }
+    get :raise_exception_on_post
     assert_equal @response.body, 'request method: GET'
   end
 
-  # test the get method, make sure the request really was a get
-  def test_post
-    assert_raise(RuntimeError) { post :raise_on_post }
-    post :raise_on_get
+  def test_post_request
+    assert_raise(RuntimeError) { post :raise_exception_on_post }
+    post :raise_exception_on_get
     assert_equal @response.body, 'request method: POST'
   end
 
-#   the following test fails because the request_method is now cached on the request instance
-#   test the get/post switch within one test action
-#   def test_get_post_switch
-#     post :raise_on_get
-#     assert_equal @response.body, 'request method: POST'
-#     get :raise_on_post
-#     assert_equal @response.body, 'request method: GET'
-#     post :raise_on_get
-#     assert_equal @response.body, 'request method: POST'
-#     get :raise_on_post
-#     assert_equal @response.body, 'request method: GET'
-#   end
+  def test_get_post_request_switch
+    post :raise_exception_on_get
+    assert_equal @response.body, 'request method: POST'
+    get :raise_exception_on_post
+    assert_equal @response.body, 'request method: GET'
+    post :raise_exception_on_get
+    assert_equal @response.body, 'request method: POST'
+    get :raise_exception_on_post
+    assert_equal @response.body, 'request method: GET'
+  end
 
-  # test the redirection to a named route
-  def test_assert_redirect_to_named_route
+  def test_string_constraint
     with_routing do |set|
-      set.draw do |map|
-        match 'route_one', :to => 'action_pack_assertions#nothing', :as => :route_one
-        match ':controller/:action'
+      set.draw do
+        get "photos", :to => 'action_pack_assertions#nothing', :constraints => {:subdomain => "admin"}
       end
-      set.install_helpers
-
-      process :redirect_to_named_route
-      assert_redirected_to 'http://test.host/route_one'
-      assert_redirected_to route_one_url
     end
   end
 
   def test_assert_redirect_to_named_route_failure
     with_routing do |set|
-      set.draw do |map|
-        match 'route_one', :to => 'action_pack_assertions#nothing', :as => :route_one
-        match 'route_two', :to => 'action_pack_assertions#nothing', :id => 'two', :as => :route_two
-        match ':controller/:action'
+      set.draw do
+        get 'route_one', :to => 'action_pack_assertions#nothing', :as => :route_one
+        get 'route_two', :to => 'action_pack_assertions#nothing', :id => 'two', :as => :route_two
+        get ':controller/:action'
       end
       process :redirect_to_named_route
       assert_raise(ActiveSupport::TestCase::Assertion) do
         assert_redirected_to 'http://test.host/route_two'
+      end
+      assert_raise(ActiveSupport::TestCase::Assertion) do
+        assert_redirected_to %r(^http://test.host/route_two)
       end
       assert_raise(ActiveSupport::TestCase::Assertion) do
         assert_redirected_to :controller => 'action_pack_assertions', :action => 'nothing', :id => 'two'
@@ -258,10 +218,9 @@ class ActionPackAssertionsControllerTest < ActionController::TestCase
     @controller = Admin::InnerModuleController.new
 
     with_routing do |set|
-      set.draw do |map|
-        match 'admin/inner_module', :to => 'admin/inner_module#index', :as => :admin_inner_module
-        # match ':controller/:action'
-        map.connect ':controller/:action/:id'
+      set.draw do
+        get 'admin/inner_module', :to => 'admin/inner_module#index', :as => :admin_inner_module
+        get ':controller/:action'
       end
       process :redirect_to_index
       # redirection is <{"action"=>"index", "controller"=>"admin/admin/inner_module"}>
@@ -273,14 +232,14 @@ class ActionPackAssertionsControllerTest < ActionController::TestCase
     @controller = Admin::InnerModuleController.new
 
     with_routing do |set|
-      set.draw do |map|
-        match '/action_pack_assertions/:id', :to => 'action_pack_assertions#index', :as => :top_level
-        # match ':controller/:action'
-        map.connect ':controller/:action/:id'
+      set.draw do
+        get '/action_pack_assertions/:id', :to => 'action_pack_assertions#index', :as => :top_level
+        get ':controller/:action'
       end
       process :redirect_to_top_level_named_route
       # assert_redirected_to "http://test.host/action_pack_assertions/foo" would pass because of exact match early return
       assert_redirected_to "/action_pack_assertions/foo"
+      assert_redirected_to %r(/action_pack_assertions/foo)
     end
   end
 
@@ -288,11 +247,10 @@ class ActionPackAssertionsControllerTest < ActionController::TestCase
     @controller = Admin::InnerModuleController.new
 
     with_routing do |set|
-      set.draw do |map|
+      set.draw do
         # this controller exists in the admin namespace as well which is the only difference from previous test
-        match '/user/:id', :to => 'user#index', :as => :top_level
-        # match ':controller/:action'
-        map.connect ':controller/:action/:id'
+        get '/user/:id', :to => 'user#index', :as => :top_level
+        get ':controller/:action'
       end
       process :redirect_to_top_level_named_route
       # assert_redirected_to top_level_url('foo') would pass because of exact match early return
@@ -300,53 +258,44 @@ class ActionPackAssertionsControllerTest < ActionController::TestCase
     end
   end
 
-  # -- standard request/response object testing --------------------------------
-
-  # make sure that the template objects exist
-  def test_template_objects_alive
+  def test_template_objects_exist
     process :assign_this
-    assert !@controller.instance_variable_get(:"@hi")
+    assert !@controller.instance_variable_defined?(:"@hi")
     assert @controller.instance_variable_get(:"@howdy")
   end
 
-  # make sure we don't have template objects when we shouldn't
-  def test_template_object_missing
+  def test_template_objects_missing
     process :nothing
-    assert_nil @controller.instance_variable_get(:@howdy)
+    assert !@controller.instance_variable_defined?(:@howdy)
   end
 
-  # check the empty flashing
-  def test_flash_me_naked
+  def test_empty_flash
     process :flash_me_naked
-    assert_deprecated do
-      assert !@response.has_flash?
-      assert !@response.has_flash_with_contents?
-    end
+    assert flash.empty?
   end
 
-  # check if we have flash objects
-  def test_flash_haves
+  def test_flash_exist
     process :flash_me
-    assert_deprecated do
-      assert @response.has_flash?
-      assert @response.has_flash_with_contents?
-      assert @response.has_flash_object?('hello')
-    end
+    assert flash.any?
+    assert flash['hello'].present?
   end
 
-  # ensure we don't have flash objects
-  def test_flash_have_nots
+  def test_flash_does_not_exist
     process :nothing
-    assert_deprecated do
-      assert !@response.has_flash?
-      assert !@response.has_flash_with_contents?
-      assert_nil @response.flash['hello']
-    end
+    assert flash.empty?
   end
 
+  def test_session_exist
+    process :session_stuffing
+    assert_equal session['xmas'], 'turkey'
+  end
 
-  # check if we were rendered by a file-based template?
-  def test_rendered_action
+  def session_does_not_exist
+    process :nothing
+    assert session.empty?
+  end
+
+  def test_render_template_action
     process :nothing
     assert_template nil
 
@@ -354,7 +303,6 @@ class ActionPackAssertionsControllerTest < ActionController::TestCase
     assert_template 'hello_world'
   end
 
-  # check the redirection location
   def test_redirection_location
     process :redirect_internal
     assert_equal 'http://test.host/nothing', @response.redirect_url
@@ -368,7 +316,6 @@ class ActionPackAssertionsControllerTest < ActionController::TestCase
     assert_nil @response.redirect_url
   end
 
-  # check server errors
   def test_server_error_response_code
     process :response500
     assert @response.server_error?
@@ -380,31 +327,23 @@ class ActionPackAssertionsControllerTest < ActionController::TestCase
     assert !@response.server_error?
   end
 
-  # check a 404 response code
   def test_missing_response_code
     process :response404
     assert @response.missing?
   end
 
-  # check client errors
   def test_client_error_response_code
     process :response404
     assert @response.client_error?
   end
 
-  # check to see if our redirection matches a pattern
   def test_redirect_url_match
     process :redirect_external
     assert @response.redirect?
-    assert_deprecated do
-      assert @response.redirect_url_match?("rubyonrails")
-      assert @response.redirect_url_match?(/rubyonrails/)
-      assert !@response.redirect_url_match?("phpoffrails")
-      assert !@response.redirect_url_match?(/perloffrails/)
-    end
+    assert_match(/rubyonrails/, @response.redirect_url)
+    assert !/perloffrails/.match(@response.redirect_url)
   end
 
-  # check for a redirection
   def test_redirection
     process :redirect_internal
     assert @response.redirect?
@@ -416,20 +355,18 @@ class ActionPackAssertionsControllerTest < ActionController::TestCase
     assert !@response.redirect?
   end
 
-  # check a successful response code
   def test_successful_response_code
     process :nothing
     assert @response.success?
   end
 
-  # a basic check to make sure we have a TestResponse object
-  def test_has_response
+  def test_response_object
     process :nothing
     assert_kind_of ActionController::TestResponse, @response
   end
 
   def test_render_based_on_parameters
-    process :render_based_on_parameters, "name" => "David"
+    process :render_based_on_parameters, "GET", "name" => "David"
     assert_equal "Mr. David", @response.body
   end
 
@@ -457,6 +394,11 @@ class ActionPackAssertionsControllerTest < ActionController::TestCase
     end
   end
 
+  def test_redirect_invalid_external_route
+    process :redirect_invalid_external_route
+    assert_redirected_to "http://test.hostht_tp://www.rubyonrails.org"
+  end
+
   def test_redirected_to_url_full_url
     process :redirect_to_path
     assert_redirected_to 'http://test.host/some/path'
@@ -480,21 +422,6 @@ class ActionPackAssertionsControllerTest < ActionController::TestCase
 
     get :redirect_to_fellow_controller
     assert_redirected_to :controller => 'admin/user'
-  end
-
-  def test_assert_valid
-    get :get_valid_record
-    assert_deprecated { assert_valid assigns('record') }
-  end
-
-  def test_assert_valid_failing
-    get :get_invalid_record
-
-    begin
-      assert_deprecated { assert_valid assigns('record') }
-      assert false
-    rescue ActiveSupport::TestCase::Assertion => e
-    end
   end
 
   def test_assert_response_uses_exception_message
@@ -521,9 +448,32 @@ end
 class AssertTemplateTest < ActionController::TestCase
   tests ActionPackAssertionsController
 
+  def test_with_invalid_hash_keys_raises_argument_error
+    assert_raise(ArgumentError) do
+      assert_template foo: "bar"
+    end
+  end
+
   def test_with_partial
     get :partial
     assert_template :partial => '_partial'
+  end
+
+  def test_file_with_absolute_path_success
+    get :render_file_absolute_path
+    assert_template :file => File.expand_path('../../../README.rdoc', __FILE__)
+  end
+
+  def test_file_with_relative_path_success
+    get :render_file_relative_path
+    assert_template :file => 'README.rdoc'
+  end
+
+  def test_with_file_failure
+    get :render_file_absolute_path
+    assert_raise(ActiveSupport::TestCase::Assertion) do
+      assert_template :file => 'test/hello_world'
+    end
   end
 
   def test_with_nil_passes_when_no_template_rendered
@@ -535,6 +485,20 @@ class AssertTemplateTest < ActionController::TestCase
     get :hello_world
     assert_raise(ActiveSupport::TestCase::Assertion) do
       assert_template nil
+    end
+  end
+
+  def test_with_empty_string_fails_when_template_rendered
+    get :hello_world
+    assert_raise(ActiveSupport::TestCase::Assertion) do
+      assert_template ""
+    end
+  end
+
+  def test_with_empty_string_fails_when_no_template_rendered
+    get :nothing
+    assert_raise(ActiveSupport::TestCase::Assertion) do
+      assert_template ""
     end
   end
 
@@ -556,11 +520,84 @@ class AssertTemplateTest < ActionController::TestCase
     end
   end
 
+  def test_fails_with_incorrect_string_that_matches
+    get :hello_world
+    assert_raise(ActiveSupport::TestCase::Assertion) do
+      assert_template 'est/he'
+    end
+  end
+
+  def test_fails_with_repeated_name_in_path
+    get :hello_repeating_in_path
+    assert_raise(ActiveSupport::TestCase::Assertion) do
+      assert_template 'test/hello'
+    end
+  end
+
   def test_fails_with_incorrect_symbol
     get :hello_world
     assert_raise(ActiveSupport::TestCase::Assertion) do
       assert_template :hello_planet
     end
+  end
+
+  def test_fails_with_incorrect_symbol_that_matches
+    get :hello_world
+    assert_raise(ActiveSupport::TestCase::Assertion) do
+      assert_template :"est/he"
+    end
+  end
+
+  def test_fails_with_wrong_layout
+    get :render_with_layout
+    assert_raise(ActiveSupport::TestCase::Assertion) do
+      assert_template :layout => "application"
+    end
+  end
+
+  def test_fails_expecting_no_layout
+    get :render_with_layout
+    assert_raise(ActiveSupport::TestCase::Assertion) do
+      assert_template :layout => nil
+    end
+  end
+
+  def test_passes_with_correct_layout
+    get :render_with_layout
+    assert_template :layout => "layouts/standard"
+  end
+
+  def test_passes_with_layout_and_partial
+    get :render_with_layout_and_partial
+    assert_template :layout => "layouts/standard"
+  end
+
+  def test_passed_with_no_layout
+    get :hello_world
+    assert_template :layout => nil
+  end
+
+  def test_passed_with_no_layout_false
+    get :hello_world
+    assert_template :layout => false
+  end
+
+  def test_passes_with_correct_layout_without_layouts_prefix
+    get :render_with_layout
+    assert_template :layout => "standard"
+  end
+
+  def test_passes_with_correct_layout_symbol
+    get :render_with_layout
+    assert_template :layout => :standard
+  end
+
+  def test_assert_template_reset_between_requests
+    get :hello_world
+    assert_template 'test/hello_world'
+
+    get :nothing
+    assert_template nil
   end
 end
 

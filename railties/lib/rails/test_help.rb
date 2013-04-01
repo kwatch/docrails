@@ -1,30 +1,26 @@
-# Make double-sure the RAILS_ENV is set to test,
-# so fixtures are loaded to the right database
-abort("Abort testing: Your Rails environment is not running in test mode!") unless Rails.env.test?
+# Make double-sure the RAILS_ENV is not set to production,
+# so fixtures aren't loaded into that environment
+abort("Abort testing: Your Rails environment is running in production mode!") if Rails.env.production?
 
-require 'test/unit'
-require 'active_support/core_ext/kernel/requires'
+require 'active_support/testing/autorun'
 require 'active_support/test_case'
 require 'action_controller/test_case'
 require 'action_dispatch/testing/integration'
 
-if defined?(Test::Unit::Util::BacktraceFilter) && ENV['BACKTRACE'].nil?
-  require 'rails/backtrace_cleaner'
-  Test::Unit::Util::BacktraceFilter.module_eval { include Rails::BacktraceFilterForTestUnit }
-end
+# Config Rails backtrace in tests.
+require 'rails/backtrace_cleaner'
+MiniTest.backtrace_filter = Rails.backtrace_cleaner
 
-if defined?(ActiveRecord)
-  require 'active_record/test_case'
-
+if defined?(ActiveRecord::Base)
   class ActiveSupport::TestCase
     include ActiveRecord::TestFixtures
     self.fixture_path = "#{Rails.root}/test/fixtures/"
   end
 
-  ActionController::IntegrationTest.fixture_path = ActiveSupport::TestCase.fixture_path
+  ActionDispatch::IntegrationTest.fixture_path = ActiveSupport::TestCase.fixture_path
 
-  def create_fixtures(*table_names, &block)
-    Fixtures.create_fixtures(ActiveSupport::TestCase.fixture_path, table_names, {}, &block)
+  def create_fixtures(*fixture_set_names, &block)
+    FixtureSet.create_fixtures(ActiveSupport::TestCase.fixture_path, fixture_set_names, {}, &block)
   end
 end
 
@@ -38,15 +34,4 @@ class ActionDispatch::IntegrationTest
   setup do
     @routes = Rails.application.routes
   end
-end
-
-begin
-  require_library_or_gem 'ruby-debug'
-  Debugger.start
-  if Debugger.respond_to?(:settings)
-    Debugger.settings[:autoeval] = true
-    Debugger.settings[:autolist] = 1
-  end
-rescue LoadError
-  # ruby-debug wasn't available so neither can the debugging be
 end

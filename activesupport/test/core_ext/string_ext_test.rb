@@ -2,13 +2,56 @@
 require 'date'
 require 'abstract_unit'
 require 'inflector_test_cases'
+require 'constantize_test_cases'
 
+require 'active_support/inflector'
 require 'active_support/core_ext/string'
 require 'active_support/time'
-require 'active_support/core_ext/kernel/reporting'
+require 'active_support/core_ext/string/strip'
+require 'active_support/core_ext/string/output_safety'
+require 'active_support/core_ext/string/indent'
 
-class StringInflectionsTest < Test::Unit::TestCase
+module Ace
+  module Base
+    class Case
+    end
+  end
+end
+
+class StringInflectionsTest < ActiveSupport::TestCase
   include InflectorTestCases
+  include ConstantizeTestCases
+
+  def test_strip_heredoc_on_an_empty_string
+    assert_equal '', ''.strip_heredoc
+  end
+
+  def test_strip_heredoc_on_a_string_with_no_lines
+    assert_equal 'x', 'x'.strip_heredoc
+    assert_equal 'x', '    x'.strip_heredoc
+  end
+
+  def test_strip_heredoc_on_a_heredoc_with_no_margin
+    assert_equal "foo\nbar", "foo\nbar".strip_heredoc
+    assert_equal "foo\n  bar", "foo\n  bar".strip_heredoc
+  end
+
+  def test_strip_heredoc_on_a_regular_indented_heredoc
+    assert_equal "foo\n  bar\nbaz\n", <<-EOS.strip_heredoc
+      foo
+        bar
+      baz
+    EOS
+  end
+
+  def test_strip_heredoc_on_a_regular_indented_heredoc_with_blank_lines
+    assert_equal "foo\n  bar\n\nbaz\n", <<-EOS.strip_heredoc
+      foo
+        bar
+
+      baz
+    EOS
+  end
 
   def test_pluralize
     SingularToPlural.each do |singular, plural|
@@ -16,6 +59,10 @@ class StringInflectionsTest < Test::Unit::TestCase
     end
 
     assert_equal("plurals", "plurals".pluralize)
+
+    assert_equal("blargles", "blargle".pluralize(0))
+    assert_equal("blargle", "blargle".pluralize(1))
+    assert_equal("blargles", "blargle".pluralize(2))
   end
 
   def test_singularize
@@ -40,6 +87,12 @@ class StringInflectionsTest < Test::Unit::TestCase
     assert_equal('capital', 'Capital'.camelize(:lower))
   end
 
+  def test_dasherize
+    UnderscoresToDashes.each do |underscored, dasherized|
+      assert_equal(dasherized, underscored.dasherize)
+    end
+  end
+
   def test_underscore
     CamelToUnderscore.each do |camel, underscore|
       assert_equal(underscore, camel.underscore)
@@ -57,6 +110,10 @@ class StringInflectionsTest < Test::Unit::TestCase
 
   def test_demodulize
     assert_equal "Account", "MyApplication::Billing::Account".demodulize
+  end
+
+  def test_deconstantize
+    assert_equal "MyApplication::Billing", "MyApplication::Billing::Account".deconstantize
   end
 
   def test_foreign_key
@@ -108,29 +165,6 @@ class StringInflectionsTest < Test::Unit::TestCase
   def test_ord
     assert_equal 97, 'a'.ord
     assert_equal 97, 'abc'.ord
-  end
-
-  def test_string_to_time
-    assert_equal Time.utc(2005, 2, 27, 23, 50), "2005-02-27 23:50".to_time
-    assert_equal Time.local(2005, 2, 27, 23, 50), "2005-02-27 23:50".to_time(:local)
-    assert_equal Time.utc(2005, 2, 27, 23, 50, 19, 275038), "2005-02-27T23:50:19.275038".to_time
-    assert_equal Time.local(2005, 2, 27, 23, 50, 19, 275038), "2005-02-27T23:50:19.275038".to_time(:local)
-    assert_equal DateTime.civil(2039, 2, 27, 23, 50), "2039-02-27 23:50".to_time
-    assert_equal Time.local_time(2039, 2, 27, 23, 50), "2039-02-27 23:50".to_time(:local)
-    assert_equal nil, "".to_time
-  end
-
-  def test_string_to_datetime
-    assert_equal DateTime.civil(2039, 2, 27, 23, 50), "2039-02-27 23:50".to_datetime
-    assert_equal 0, "2039-02-27 23:50".to_datetime.offset # use UTC offset
-    assert_equal ::Date::ITALY, "2039-02-27 23:50".to_datetime.start # use Ruby's default start value
-    assert_equal DateTime.civil(2039, 2, 27, 23, 50, 19 + Rational(275038, 1000000), "-04:00"), "2039-02-27T23:50:19.275038-04:00".to_datetime
-    assert_equal nil, "".to_datetime
-  end
-
-  def test_string_to_date
-    assert_equal Date.new(2005, 2, 27), "2005-02-27".to_date
-    assert_equal nil, "".to_date
   end
 
   def test_access
@@ -195,10 +229,11 @@ class StringInflectionsTest < Test::Unit::TestCase
   end
 
   def test_string_squish
-    original = %{ A string with tabs(\t\t), newlines(\n\n), and
-                  many spaces(  ). }
+    original = %{\u180E\u180E A string surrounded by unicode mongolian vowel separators,
+      with tabs(\t\t), newlines(\n\n), unicode nextlines(\u0085\u0085) and many spaces(  ). \u180E\u180E}
 
-    expected = "A string with tabs( ), newlines( ), and many spaces( )."
+    expected = "A string surrounded by unicode mongolian vowel separators, " +
+      "with tabs( ), newlines( ), unicode nextlines( ) and many spaces( )."
 
     # Make sure squish returns what we expect:
     assert_equal original.squish,  expected
@@ -210,116 +245,141 @@ class StringInflectionsTest < Test::Unit::TestCase
     # And changes the original string:
     assert_equal original, expected
   end
+
+  def test_string_inquiry
+    assert "production".inquiry.production?
+    assert !"production".inquiry.development?
+  end
+
+  def test_truncate
+    assert_equal "Hello World!", "Hello World!".truncate(12)
+    assert_equal "Hello Wor...", "Hello World!!".truncate(12)
+  end
+
+  def test_truncate_with_omission_and_seperator
+    assert_equal "Hello[...]", "Hello World!".truncate(10, :omission => "[...]")
+    assert_equal "Hello[...]", "Hello Big World!".truncate(13, :omission => "[...]", :separator => ' ')
+    assert_equal "Hello Big[...]", "Hello Big World!".truncate(14, :omission => "[...]", :separator => ' ')
+    assert_equal "Hello Big[...]", "Hello Big World!".truncate(15, :omission => "[...]", :separator => ' ')
+  end
+
+  def test_truncate_with_omission_and_regexp_seperator
+    assert_equal "Hello[...]", "Hello Big World!".truncate(13, :omission => "[...]", :separator => /\s/)
+    assert_equal "Hello Big[...]", "Hello Big World!".truncate(14, :omission => "[...]", :separator => /\s/)
+    assert_equal "Hello Big[...]", "Hello Big World!".truncate(15, :omission => "[...]", :separator => /\s/)
+  end
+
+  def test_truncate_multibyte
+    assert_equal "\354\225\204\353\246\254\353\236\221 \354\225\204\353\246\254 ...".force_encoding(Encoding::UTF_8),
+      "\354\225\204\353\246\254\353\236\221 \354\225\204\353\246\254 \354\225\204\353\235\274\353\246\254\354\230\244".force_encoding(Encoding::UTF_8).truncate(10)
+  end
+
+  def test_truncate_should_not_be_html_safe
+    assert !"Hello World!".truncate(12).html_safe?
+  end
+
+  def test_constantize
+    run_constantize_tests_on do |string|
+      string.constantize
+    end
+  end
+
+  def test_safe_constantize
+    run_safe_constantize_tests_on do |string|
+      string.safe_constantize
+    end
+  end
 end
 
-class StringBehaviourTest < Test::Unit::TestCase
+class StringConversionsTest < ActiveSupport::TestCase
+  def test_string_to_time
+    with_env_tz "US/Eastern" do
+      assert_equal Time.utc(2005, 2, 27, 23, 50), "2005-02-27 23:50".to_time(:utc)
+      assert_equal Time.local(2005, 2, 27, 23, 50), "2005-02-27 23:50".to_time
+      assert_equal Time.utc(2005, 2, 27, 23, 50, 19, 275038), "2005-02-27T23:50:19.275038".to_time(:utc)
+      assert_equal Time.local(2005, 2, 27, 23, 50, 19, 275038), "2005-02-27T23:50:19.275038".to_time
+      assert_equal Time.utc(2039, 2, 27, 23, 50), "2039-02-27 23:50".to_time(:utc)
+      assert_equal Time.local(2039, 2, 27, 23, 50), "2039-02-27 23:50".to_time
+      assert_equal Time.local(2011, 2, 27, 18, 50), "2011-02-27 22:50 -0100".to_time
+      assert_equal Time.utc(2011, 2, 27, 23, 50), "2011-02-27 22:50 -0100".to_time(:utc)
+      assert_equal Time.local(2005, 2, 27, 23, 50), "2005-02-27 23:50 -0500".to_time
+      assert_nil "".to_time
+    end
+  end
+
+  def test_string_to_time_utc_offset
+    with_env_tz "US/Eastern" do
+      assert_equal 0, "2005-02-27 23:50".to_time(:utc).utc_offset
+      assert_equal(-18000, "2005-02-27 23:50".to_time.utc_offset)
+      assert_equal 0, "2005-02-27 22:50 -0100".to_time(:utc).utc_offset
+      assert_equal(-18000, "2005-02-27 22:50 -0100".to_time.utc_offset)
+    end
+  end
+
+  def test_partial_string_to_time
+    with_env_tz "US/Eastern" do
+      now = Time.now
+      assert_equal Time.local(now.year, now.month, now.day, 23, 50), "23:50".to_time
+      assert_equal Time.utc(now.year, now.month, now.day, 23, 50), "23:50".to_time(:utc)
+      assert_equal Time.local(now.year, now.month, now.day, 18, 50), "22:50 -0100".to_time
+      assert_equal Time.utc(now.year, now.month, now.day, 23, 50), "22:50 -0100".to_time(:utc)
+    end
+  end
+
+  def test_string_to_datetime
+    assert_equal DateTime.civil(2039, 2, 27, 23, 50), "2039-02-27 23:50".to_datetime
+    assert_equal 0, "2039-02-27 23:50".to_datetime.offset # use UTC offset
+    assert_equal ::Date::ITALY, "2039-02-27 23:50".to_datetime.start # use Ruby's default start value
+    assert_equal DateTime.civil(2039, 2, 27, 23, 50, 19 + Rational(275038, 1000000), "-04:00"), "2039-02-27T23:50:19.275038-04:00".to_datetime
+    assert_nil "".to_datetime
+  end
+
+  def test_partial_string_to_datetime
+    now = DateTime.now
+    assert_equal DateTime.civil(now.year, now.month, now.day, 23, 50), "23:50".to_datetime
+    assert_equal DateTime.civil(now.year, now.month, now.day, 23, 50, 0, "-04:00"), "23:50 -0400".to_datetime
+  end
+
+  def test_string_to_date
+    assert_equal Date.new(2005, 2, 27), "2005-02-27".to_date
+    assert_nil "".to_date
+    assert_equal Date.new(Date.today.year, 2, 3), "Feb 3rd".to_date
+  end
+
+  protected
+    def with_env_tz(new_tz = 'US/Eastern')
+      old_tz, ENV['TZ'] = ENV['TZ'], new_tz
+      yield
+    ensure
+      old_tz ? ENV['TZ'] = old_tz : ENV.delete('TZ')
+    end
+end
+
+class StringBehaviourTest < ActiveSupport::TestCase
   def test_acts_like_string
     assert 'Bambi'.acts_like_string?
   end
 end
 
 class CoreExtStringMultibyteTest < ActiveSupport::TestCase
-  UNICODE_STRING = 'こにちわ'
-  ASCII_STRING = 'ohayo'
-  BYTE_STRING = "\270\236\010\210\245"
+  UTF8_STRING = 'こにちわ'
+  ASCII_STRING = 'ohayo'.encode('US-ASCII')
+  EUC_JP_STRING = 'さよなら'.encode('EUC-JP')
+  INVALID_UTF8_STRING = "\270\236\010\210\245"
 
   def test_core_ext_adds_mb_chars
-    assert UNICODE_STRING.respond_to?(:mb_chars)
+    assert_respond_to UTF8_STRING, :mb_chars
   end
 
   def test_string_should_recognize_utf8_strings
-    assert UNICODE_STRING.is_utf8?
+    assert UTF8_STRING.is_utf8?
     assert ASCII_STRING.is_utf8?
-    assert !BYTE_STRING.is_utf8?
+    assert !EUC_JP_STRING.is_utf8?
+    assert !INVALID_UTF8_STRING.is_utf8?
   end
 
-  if RUBY_VERSION < '1.9'
-    def test_mb_chars_returns_self_when_kcode_not_set
-      with_kcode('none') do
-        assert UNICODE_STRING.mb_chars.kind_of?(String)
-      end
-    end
-
-    def test_mb_chars_returns_an_instance_of_the_chars_proxy_when_kcode_utf8
-      with_kcode('UTF8') do
-        assert UNICODE_STRING.mb_chars.kind_of?(ActiveSupport::Multibyte.proxy_class)
-      end
-    end
-  end
-
-  if RUBY_VERSION >= '1.9'
-    def test_mb_chars_returns_string
-      assert UNICODE_STRING.mb_chars.kind_of?(String)
-    end
-  end
-end
-
-=begin
-  string.rb - Interpolation for String.
-
-  Copyright (C) 2005-2009 Masao Mutoh
-
-  You may redistribute it and/or modify it under the same
-  license terms as Ruby.
-=end
-class TestGetTextString < Test::Unit::TestCase
-  def test_sprintf
-    assert_equal("foo is a number", "%{msg} is a number" % {:msg => "foo"})
-    assert_equal("bar is a number", "%s is a number" % ["bar"])
-    assert_equal("bar is a number", "%s is a number" % "bar")
-    assert_equal("1, test", "%{num}, %{record}" % {:num => 1, :record => "test"})
-    assert_equal("test, 1", "%{record}, %{num}" % {:num => 1, :record => "test"})
-    assert_equal("1, test", "%d, %s" % [1, "test"])
-    assert_equal("test, 1", "%2$s, %1$d" % [1, "test"])
-    assert_raise(ArgumentError) { "%-%" % [1] }
-  end
-
-  def test_percent
-    assert_equal("% 1", "%% %<num>d" % {:num => 1.0})
-    assert_equal("%{num} %<num>d 1", "%%{num} %%<num>d %<num>d" % {:num => 1})
-  end
-
-  def test_sprintf_percent_in_replacement
-    assert_equal("%<not_translated>s", "%{msg}" % { :msg => '%<not_translated>s', :not_translated => 'should not happen' })
-  end
-
-  def test_sprintf_lack_argument
-    assert_raises(KeyError) { "%{num}, %{record}" % {:record => "test"} }
-    assert_raises(KeyError) { "%{record}" % {:num => 1} }
-  end
-
-  def test_no_placeholder
-    # Causes a "too many arguments for format string" warning
-    # on 1.8.7 and 1.9 but we still want to make sure the behavior works
-    silence_warnings do
-      assert_equal("aaa", "aaa" % {:num => 1})
-      assert_equal("bbb", "bbb" % [1])
-    end
-  end
-
-  def test_sprintf_ruby19_style
-    assert_equal("1", "%<num>d" % {:num => 1})
-    assert_equal("0b1", "%<num>#b" % {:num => 1})
-    assert_equal("foo", "%<msg>s" % {:msg => "foo"})
-    assert_equal("1.000000", "%<num>f" % {:num => 1.0})
-    assert_equal("  1", "%<num>3.0f" % {:num => 1.0})
-    assert_equal("100.00", "%<num>2.2f" % {:num => 100.0})
-    assert_equal("0x64", "%<num>#x" % {:num => 100.0})
-    assert_raise(ArgumentError) { "%<num>,d" % {:num => 100} }
-    assert_raise(ArgumentError) { "%<num>/d" % {:num => 100} }
-  end
-
-  def test_sprintf_old_style
-    assert_equal("foo 1.000000", "%s %f" % ["foo", 1.0])
-  end
-
-  def test_sprintf_mix_unformatted_and_formatted_named_placeholders
-    assert_equal("foo 1.000000", "%{name} %<num>f" % {:name => "foo", :num => 1.0})
-  end
-
-  def test_string_interpolation_raises_an_argument_error_when_mixing_named_and_unnamed_placeholders
-    assert_raises(ArgumentError) { "%{name} %f" % [1.0] }
-    assert_raises(ArgumentError) { "%{name} %f" % [1.0, 2.0] }
+  def test_mb_chars_returns_instance_of_proxy_class
+    assert_kind_of ActiveSupport::Multibyte.proxy_class, UTF8_STRING.mb_chars
   end
 end
 
@@ -348,6 +408,10 @@ class OutputSafetyTest < ActiveSupport::TestCase
 
   test "A fixnum is safe by default" do
     assert 5.html_safe?
+  end
+
+  test "a float is safe by default" do
+    assert 5.7.html_safe?
   end
 
   test "An object is unsafe by default" do
@@ -429,6 +493,37 @@ class OutputSafetyTest < ActiveSupport::TestCase
     assert @other_string.html_safe?
   end
 
+  test "Concatting safe onto unsafe with % yields unsafe" do
+    @other_string = "other%s"
+    string = @string.html_safe
+
+    @other_string = @other_string % string
+    assert !@other_string.html_safe?
+  end
+
+  test "Concatting unsafe onto safe with % yields escaped safe" do
+    @other_string = "other%s".html_safe
+    string = @other_string % "<foo>"
+
+    assert_equal "other&lt;foo&gt;", string
+    assert string.html_safe?
+  end
+
+  test "Concatting safe onto safe with % yields safe" do
+    @other_string = "other%s".html_safe
+    string = @string.html_safe
+
+    @other_string = @other_string % string
+    assert @other_string.html_safe?
+  end
+
+  test "Concatting with % doesn't modify a string" do
+    @other_string = ["<p>", "<b>", "<h1>"]
+    _ = "%s %s %s".html_safe % @other_string
+
+    assert_equal ["<p>", "<b>", "<h1>"], @other_string
+  end
+
   test "Concatting a fixnum to safe always yields safe" do
     string = @string.html_safe
     string = string.concat(13)
@@ -439,11 +534,95 @@ class OutputSafetyTest < ActiveSupport::TestCase
   test 'emits normal string yaml' do
     assert_equal 'foo'.to_yaml, 'foo'.html_safe.to_yaml(:foo => 1)
   end
+
+  test 'knows whether it is encoding aware' do
+    assert_deprecated do
+      assert 'ruby'.encoding_aware?
+    end
+  end
+
+  test "call to_param returns a normal string" do
+    string = @string.html_safe
+    assert string.html_safe?
+    assert !string.to_param.html_safe?
+  end
+
+  test "ERB::Util.html_escape should escape unsafe characters" do
+    string = '<>&"\''
+    expected = '&lt;&gt;&amp;&quot;&#39;'
+    assert_equal expected, ERB::Util.html_escape(string)
+  end
+
+  test "ERB::Util.html_escape should correctly handle invalid UTF-8 strings" do
+    string = [192, 60].pack('CC')
+    expected = 192.chr + "&lt;"
+    assert_equal expected, ERB::Util.html_escape(string)
+  end
+
+  test "ERB::Util.html_escape should not escape safe strings" do
+    string = "<b>hello</b>".html_safe
+    assert_equal string, ERB::Util.html_escape(string)
+  end
 end
 
 class StringExcludeTest < ActiveSupport::TestCase
   test 'inverse of #include' do
     assert_equal false, 'foo'.exclude?('o')
     assert_equal true, 'foo'.exclude?('p')
+  end
+end
+
+class StringIndentTest < ActiveSupport::TestCase
+  test 'does not indent strings that only contain newlines (edge cases)' do
+    ['', "\n", "\n" * 7].each do |str|
+      assert_nil str.indent!(8)
+      assert_equal str, str.indent(8)
+      assert_equal str, str.indent(1, "\t")
+    end
+  end
+
+  test "by default, indents with spaces if the existing indentation uses them" do
+    assert_equal "    foo\n      bar", "foo\n  bar".indent(4)
+  end
+
+  test "by default, indents with tabs if the existing indentation uses them" do
+    assert_equal "\tfoo\n\t\t\bar", "foo\n\t\bar".indent(1)
+  end
+
+  test "by default, indents with spaces as a fallback if there is no indentation" do
+    assert_equal "   foo\n   bar\n   baz", "foo\nbar\nbaz".indent(3)
+  end
+
+  # Nothing is said about existing indentation that mixes spaces and tabs, so
+  # there is nothing to test.
+
+  test 'uses the indent char if passed' do
+    assert_equal <<EXPECTED, <<ACTUAL.indent(4, '.')
+....  def some_method(x, y)
+....    some_code
+....  end
+EXPECTED
+  def some_method(x, y)
+    some_code
+  end
+ACTUAL
+
+    assert_equal <<EXPECTED, <<ACTUAL.indent(2, '&nbsp;')
+&nbsp;&nbsp;&nbsp;&nbsp;def some_method(x, y)
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;some_code
+&nbsp;&nbsp;&nbsp;&nbsp;end
+EXPECTED
+&nbsp;&nbsp;def some_method(x, y)
+&nbsp;&nbsp;&nbsp;&nbsp;some_code
+&nbsp;&nbsp;end
+ACTUAL
+  end
+
+  test "does not indent blank lines by default" do
+    assert_equal " foo\n\n bar", "foo\n\nbar".indent(1)
+  end
+
+  test 'indents blank lines if told so' do
+    assert_equal " foo\n \n bar", "foo\n\nbar".indent(1, nil, true)
   end
 end

@@ -26,15 +26,26 @@ module Yz
   end
 end
 
-class De
+Somewhere = Struct.new(:street, :city) do
+  attr_accessor :name
 end
 
-Somewhere = Struct.new(:street, :city)
-
-Someone   = Struct.new(:name, :place) do
+class Someone < Struct.new(:name, :place)
   delegate :street, :city, :to_f, :to => :place
-  delegate :state, :to => :@place
+  delegate :name=, :to => :place, :prefix => true
   delegate :upcase, :to => "place.city"
+  delegate :table_name, :to => :class
+  delegate :table_name, :to => :class, :prefix => true
+
+  def self.table_name
+    'some_table'
+  end
+
+  FAILED_DELEGATE_LINE = __LINE__ + 1
+  delegate :foo, :to => :place
+
+  FAILED_DELEGATE_LINE_2 = __LINE__ + 1
+  delegate :bar, :to => :place, :allow_nil => true
 end
 
 Invoice   = Struct.new(:client) do
@@ -47,6 +58,22 @@ Project   = Struct.new(:description, :person) do
   delegate :to_f, :to => :description, :allow_nil => true
 end
 
+Developer = Struct.new(:client) do
+  delegate :name, :to => :client, :prefix => nil
+end
+
+Tester = Struct.new(:client) do
+  delegate :name, :to => :client, :prefix => false
+end
+
+class ParameterSet
+  delegate :[], :[]=, :to => :@params
+
+  def initialize
+    @params = {:foo => "bar"}
+  end
+end
+
 class Name
   delegate :upcase, :to => :@full_name
 
@@ -55,7 +82,7 @@ class Name
   end
 end
 
-class ModuleTest < Test::Unit::TestCase
+class ModuleTest < ActiveSupport::TestCase
   def setup
     @david = Someone.new("David", Somewhere.new("Paulina", "Chicago"))
   end
@@ -65,6 +92,22 @@ class ModuleTest < Test::Unit::TestCase
     assert_equal "Chicago", @david.city
   end
 
+  def test_delegation_to_assignment_method
+    @david.place_name = "Fred"
+    assert_equal "Fred", @david.place.name
+  end
+
+  def test_delegation_to_index_get_method
+    @params = ParameterSet.new
+    assert_equal "bar", @params[:foo]
+  end
+
+  def test_delegation_to_index_set_method
+    @params = ParameterSet.new
+    @params[:foo] = "baz"
+    assert_equal "baz", @params[:foo]
+  end
+
   def test_delegation_down_hierarchy
     assert_equal "CHICAGO", @david.upcase
   end
@@ -72,6 +115,11 @@ class ModuleTest < Test::Unit::TestCase
   def test_delegation_to_instance_variable
     david = Name.new("David", "Hansson")
     assert_equal "DAVID HANSSON", david.upcase
+  end
+
+  def test_delegation_to_class_method
+    assert_equal 'some_table', @david.table_name
+    assert_equal 'some_table', @david.class_table_name
   end
 
   def test_missing_delegation_target
@@ -95,6 +143,11 @@ class ModuleTest < Test::Unit::TestCase
     assert_equal invoice.customer_name, "David"
     assert_equal invoice.customer_street, "Paulina"
     assert_equal invoice.customer_city, "Chicago"
+  end
+
+  def test_delegation_prefix_with_nil_or_false
+    assert_equal Developer.new(@david).name, "David"
+    assert_equal Tester.new(@david).name, "David"
   end
 
   def test_delegation_prefix_with_instance_variable
@@ -147,12 +200,32 @@ class ModuleTest < Test::Unit::TestCase
     end
 
     assert_nothing_raised do
-      child = Class.new(parent) do
+      Class.new(parent) do
         class << self
           delegate :parent_method, :to => :superclass
         end
       end
     end
+  end
+
+  def test_delegation_exception_backtrace
+    someone = Someone.new("foo", "bar")
+    someone.foo
+  rescue NoMethodError => e
+    file_and_line = "#{__FILE__}:#{Someone::FAILED_DELEGATE_LINE}"
+    # We can't simply check the first line of the backtrace, because JRuby reports the call to __send__ in the backtrace.
+    assert e.backtrace.any?{|a| a.include?(file_and_line)},
+           "[#{e.backtrace.inspect}] did not include [#{file_and_line}]"
+  end
+
+  def test_delegation_exception_backtrace_with_allow_nil
+    someone = Someone.new("foo", "bar")
+    someone.bar
+  rescue NoMethodError => e
+    file_and_line = "#{__FILE__}:#{Someone::FAILED_DELEGATE_LINE_2}"
+    # We can't simply check the first line of the backtrace, because JRuby reports the call to __send__ in the backtrace.
+    assert e.backtrace.any?{|a| a.include?(file_and_line)},
+           "[#{e.backtrace.inspect}] did not include [#{file_and_line}]"
   end
 
   def test_parent
@@ -168,6 +241,12 @@ class ModuleTest < Test::Unit::TestCase
 
   def test_local_constants
     assert_equal %w(Constant1 Constant3), Ab.local_constants.sort.map(&:to_s)
+  end
+
+  def test_local_constant_names
+    ActiveSupport::Deprecation.silence do
+      assert_equal %w(Constant1 Constant3), Ab.local_constant_names.sort.map(&:to_s)
+    end
   end
 end
 
@@ -202,7 +281,7 @@ module BarMethods
   end
 end
 
-class MethodAliasingTest < Test::Unit::TestCase
+class MethodAliasingTest < ActiveSupport::TestCase
   def setup
     Object.const_set :FooClassWithBarMethod, Class.new { def bar() 'bar' end }
     @instance = FooClassWithBarMethod.new
@@ -225,7 +304,7 @@ class MethodAliasingTest < Test::Unit::TestCase
     FooClassWithBarMethod.class_eval { include BarMethodAliaser }
 
     feature_aliases.each do |method|
-      assert @instance.respond_to?(method)
+      assert_respond_to @instance, method
     end
 
     assert_equal 'bar_with_baz', @instance.bar
@@ -242,7 +321,7 @@ class MethodAliasingTest < Test::Unit::TestCase
       include BarMethodAliaser
       alias_method_chain :quux!, :baz
     end
-    assert @instance.respond_to?(:quux_with_baz!)
+    assert_respond_to @instance, :quux_with_baz!
 
     assert_equal 'quux_with_baz', @instance.quux!
     assert_equal 'quux', @instance.quux_without_baz!
@@ -260,9 +339,9 @@ class MethodAliasingTest < Test::Unit::TestCase
     assert !@instance.respond_to?(:quux_with_baz=)
 
     FooClassWithBarMethod.class_eval { include BarMethodAliaser }
-    assert @instance.respond_to?(:quux_with_baz!)
-    assert @instance.respond_to?(:quux_with_baz?)
-    assert @instance.respond_to?(:quux_with_baz=)
+    assert_respond_to @instance, :quux_with_baz!
+    assert_respond_to @instance, :quux_with_baz?
+    assert_respond_to @instance, :quux_with_baz=
 
 
     FooClassWithBarMethod.alias_method_chain :quux!, :baz

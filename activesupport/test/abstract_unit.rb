@@ -1,3 +1,5 @@
+ORIG_ARGV = ARGV.dup
+
 begin
   old, $VERBOSE = $VERBOSE, nil
   require File.expand_path('../../../load_paths', __FILE__)
@@ -5,47 +7,21 @@ ensure
   $VERBOSE = old
 end
 
-lib = File.expand_path("#{File.dirname(__FILE__)}/../lib")
-$:.unshift(lib) unless $:.include?('lib') || $:.include?(lib)
-
-require 'test/unit'
 require 'active_support/core_ext/kernel/reporting'
-require 'empty_bool'
+require 'active_support/core_ext/string/encoding'
 
-silence_warnings { require 'mocha' }
+silence_warnings do
+  Encoding.default_internal = "UTF-8"
+  Encoding.default_external = "UTF-8"
+end
+
+require 'active_support/testing/autorun'
+require 'empty_bool'
 
 ENV['NO_RELOAD'] = '1'
 require 'active_support'
 
-# Include shims until we get off 1.8.6
-require 'active_support/ruby/shim'
-
-def uses_memcached(test_name)
-  require 'memcache'
-  begin
-    MemCache.new('localhost').stats
-    yield
-  rescue MemCache::MemCacheError
-    $stderr.puts "Skipping #{test_name} tests. Start memcached and try again."
-  end
-end
-
-def with_kcode(code)
-  if RUBY_VERSION < '1.9'
-    begin
-      old_kcode, $KCODE = $KCODE, code
-      yield
-    ensure
-      $KCODE = old_kcode
-    end
-  else
-    yield
-  end
-end
+Thread.abort_on_exception = true
 
 # Show backtraces for deprecated behavior for quicker cleanup.
 ActiveSupport::Deprecation.debug = true
-
-if RUBY_VERSION < '1.9'
-  $KCODE = 'UTF8'
-end

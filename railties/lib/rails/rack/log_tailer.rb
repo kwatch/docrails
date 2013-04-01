@@ -4,11 +4,13 @@ module Rails
       def initialize(app, log = nil)
         @app = app
 
-        path = Pathname.new(log || "#{File.expand_path(Rails.root)}/log/#{Rails.env}.log").cleanpath
-        @cursor = ::File.size(path)
-        @last_checked = Time.now.to_f
+        path = Pathname.new(log || "#{::File.expand_path(Rails.root)}/log/#{Rails.env}.log").cleanpath
 
-        @file = ::File.open(path, 'r')
+        @cursor = @file = nil
+        if ::File.exists?(path)
+          @cursor = ::File.size(path)
+          @file = ::File.open(path, 'r')
+        end
       end
 
       def call(env)
@@ -18,13 +20,12 @@ module Rails
       end
 
       def tail!
+        return unless @cursor
         @file.seek @cursor
 
-        mod = @file.mtime.to_f
-        if mod > @last_checked
+        unless @file.eof?
           contents = @file.read
-          @last_checked = mod
-          @cursor += contents.size
+          @cursor = @file.tell
           $stdout.print contents
         end
       end

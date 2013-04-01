@@ -1,37 +1,36 @@
-require 'memcache'
+begin
+  require 'dalli'
+rescue LoadError => e
+  $stderr.puts "You don't have dalli installed in your application. Please add it to your Gemfile and run bundle install"
+  raise e
+end
+
 require 'digest/md5'
+require 'active_support/core_ext/marshal'
+require 'active_support/core_ext/array/extract_options'
 
 module ActiveSupport
   module Cache
     # A cache store implementation which stores data in Memcached:
-    # http://www.danga.com/memcached/
+    # http://memcached.org/
     #
     # This is currently the most popular cache store for production websites.
     #
     # Special features:
     # - Clustering and load balancing. One can specify multiple memcached servers,
     #   and MemCacheStore will load balance between all available servers. If a
-    #   server goes down, then MemCacheStore will ignore it until it goes back
-    #   online.
+    #   server goes down, then MemCacheStore will ignore it until it comes back up.
     #
     # MemCacheStore implements the Strategy::LocalCache strategy which implements
-    # an in memory cache inside of a block.
+    # an in-memory cache inside of a block.
     class MemCacheStore < Store
-      module Response # :nodoc:
-        STORED      = "STORED\r\n"
-        NOT_STORED  = "NOT_STORED\r\n"
-        EXISTS      = "EXISTS\r\n"
-        NOT_FOUND   = "NOT_FOUND\r\n"
-        DELETED     = "DELETED\r\n"
-      end
-
-      ESCAPE_KEY_CHARS = /[\x00-\x20%\x7F-\xFF]/
+      ESCAPE_KEY_CHARS = /[\x00-\x20%\x7F-\xFF]/n
 
       def self.build_mem_cache(*addresses)
         addresses = addresses.flatten
         options = addresses.extract_options!
-        addresses = ["localhost"] if addresses.empty?
-        MemCache.new(addresses, options)
+        addresses = ["localhost:11211"] if addresses.empty?
+        Dalli::Client.new(addresses, options)
       end
 
       # Creates a new MemCacheStore object, with the given memcached server
@@ -64,12 +63,12 @@ module ActiveSupport
         extend LocalCacheWithRaw
       end
 
-      # Reads multiple keys from the cache using a single call to the
+      # Reads multiple values from the cache using a single call to the
       # servers for all keys. Options can be passed in the last argument.
       def read_multi(*names)
         options = names.extract_options!
         options = merged_options(options)
-        keys_to_names = names.inject({}){|map, name| map[escape_key(namespaced_key(name, options))] = name; map}
+        keys_to_names = Hash[names.map{|name| [escape_key(namespaced_key(name, options)), name]}]
         raw_values = @data.get_multi(keys_to_names.keys, :raw => true)
         values = {}
         raw_values.each do |key, value|
@@ -85,11 +84,11 @@ module ActiveSupport
       # to zero.
       def increment(name, amount = 1, options = nil) # :nodoc:
         options = merged_options(options)
-        response = instrument(:increment, name, :amount => amount) do
+        instrument(:increment, name, :amount => amount) do
           @data.incr(escape_key(namespaced_key(name, options)), amount)
         end
-        response == Response::NOT_FOUND ? nil : response.to_i
-      rescue MemCache::MemCacheError
+      rescue Dalli::DalliError
+        logger.error("DalliError (#{e}): #{e.message}") if logger
         nil
       end
 
@@ -99,18 +98,21 @@ module ActiveSupport
       # to zero.
       def decrement(name, amount = 1, options = nil) # :nodoc:
         options = merged_options(options)
-        response = instrument(:decrement, name, :amount => amount) do
+        instrument(:decrement, name, :amount => amount) do
           @data.decr(escape_key(namespaced_key(name, options)), amount)
         end
-        response == Response::NOT_FOUND ? nil : response.to_i
-      rescue MemCache::MemCacheError
+      rescue Dalli::DalliError
+        logger.error("DalliError (#{e}): #{e.message}") if logger
         nil
       end
 
       # Clear the entire cache on all memcached servers. This method should
-      # be used with care when using a shared cache.
+      # be used with care when shared cache is being used.
       def clear(options = nil)
         @data.flush_all
+      rescue Dalli::DalliError => e
+        logger.error("DalliError (#{e}): #{e.message}") if logger
+        nil
       end
 
       # Get the statistics from the memcached servers.
@@ -121,9 +123,9 @@ module ActiveSupport
       protected
         # Read an entry from the cache.
         def read_entry(key, options) # :nodoc:
-          deserialize_entry(@data.get(escape_key(key), true))
-        rescue MemCache::MemCacheError => e
-          logger.error("MemCacheError (#{e}): #{e.message}") if logger
+          deserialize_entry(@data.get(escape_key(key), options))
+        rescue Dalli::DalliError => e
+          logger.error("DalliError (#{e}): #{e.message}") if logger
           nil
         end
 
@@ -136,25 +138,29 @@ module ActiveSupport
             # Set the memcache expire a few minutes in the future to support race condition ttls on read
             expires_in += 5.minutes
           end
-          response = @data.send(method, escape_key(key), value, expires_in, options[:raw])
-          response == Response::STORED
-        rescue MemCache::MemCacheError => e
-          logger.error("MemCacheError (#{e}): #{e.message}") if logger
+          @data.send(method, escape_key(key), value, expires_in, options)
+        rescue Dalli::DalliError => e
+          logger.error("DalliError (#{e}): #{e.message}") if logger
           false
         end
 
         # Delete an entry from the cache.
         def delete_entry(key, options) # :nodoc:
-          response = @data.delete(escape_key(key))
-          response == Response::DELETED
-        rescue MemCache::MemCacheError => e
-          logger.error("MemCacheError (#{e}): #{e.message}") if logger
+          @data.delete(escape_key(key))
+        rescue Dalli::DalliError => e
+          logger.error("DalliError (#{e}): #{e.message}") if logger
           false
         end
 
       private
+
+        # Memcache keys are binaries. So we need to force their encoding to binary
+        # before applying the regular expression to ensure we are escaping all
+        # characters properly.
         def escape_key(key)
-          key = key.to_s.gsub(ESCAPE_KEY_CHARS){|match| "%#{match[0].to_s(16).upcase}"}
+          key = key.to_s.dup
+          key = key.force_encoding(Encoding::ASCII_8BIT)
+          key = key.gsub(ESCAPE_KEY_CHARS){ |match| "%#{match.getbyte(0).to_s(16).upcase}" }
           key = "#{key[0, 213]}:md5:#{Digest::MD5.hexdigest(key)}" if key.size > 250
           key
         end
@@ -171,6 +177,14 @@ module ActiveSupport
       # Provide support for raw values in the local cache strategy.
       module LocalCacheWithRaw # :nodoc:
         protected
+          def read_entry(key, options)
+            entry = super
+            if options[:raw] && local_cache && entry
+               entry = deserialize_entry(entry.value)
+            end
+            entry
+          end
+
           def write_entry(key, entry, options) # :nodoc:
             retval = super
             if options[:raw] && local_cache && retval

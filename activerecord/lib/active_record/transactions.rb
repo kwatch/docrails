@@ -4,15 +4,17 @@ module ActiveRecord
   # See ActiveRecord::Transactions::ClassMethods for documentation.
   module Transactions
     extend ActiveSupport::Concern
+    ACTIONS = [:create, :destroy, :update]
 
     class TransactionError < ActiveRecordError # :nodoc:
     end
 
     included do
-      define_model_callbacks :commit, :commit_on_update, :commit_on_create, :commit_on_destroy, :only => :after
-      define_model_callbacks :rollback, :rollback_on_update, :rollback_on_create, :rollback_on_destroy
+      define_callbacks :commit, :rollback, :terminator => "result == false", :scope => [:kind, :name]
     end
 
+    # = Active Record Transactions
+    #
     # Transactions are protective blocks where SQL statements are only permanent
     # if they can all succeed as one atomic action. The classic example is a
     # transfer between two accounts where you can only have a deposit if the
@@ -20,7 +22,8 @@ module ActiveRecord
     # the database and guard the data against program errors or database
     # break-downs. So basically you should use transaction blocks whenever you
     # have a number of statements that must be executed together or not at all.
-    # Example:
+    #
+    # For example:
     #
     #   ActiveRecord::Base.transaction do
     #     david.withdrawal(100)
@@ -77,7 +80,7 @@ module ActiveRecord
     #
     # Both +save+ and +destroy+ come wrapped in a transaction that ensures
     # that whatever you do in validations or callbacks will happen under its
-    # protected cover. So you can use validations to check for values that 
+    # protected cover. So you can use validations to check for values that
     # the transaction depends on or you can raise exceptions in the callbacks
     # to rollback, including <tt>after_*</tt> callbacks.
     #
@@ -106,10 +109,10 @@ module ActiveRecord
     #
     #   # Suppose that we have a Number model with a unique column called 'i'.
     #   Number.transaction do
-    #     Number.create(:i => 0)
+    #     Number.create(i: 0)
     #     begin
     #       # This will raise a unique constraint error...
-    #       Number.create(:i => 0)
+    #       Number.create(i: 0)
     #     rescue ActiveRecord::StatementInvalid
     #       # ...which we ignore.
     #     end
@@ -117,7 +120,7 @@ module ActiveRecord
     #     # On PostgreSQL, the transaction is now unusable. The following
     #     # statement will cause a PostgreSQL error, even though the unique
     #     # constraint is no longer violated:
-    #     Number.create(:i => 1)
+    #     Number.create(i: 1)
     #     # => "PGError: ERROR:  current transaction is aborted, commands
     #     #     ignored until end of transaction block"
     #   end
@@ -129,38 +132,41 @@ module ActiveRecord
     #
     # +transaction+ calls can be nested. By default, this makes all database
     # statements in the nested transaction block become part of the parent
-    # transaction. For example:
+    # transaction. For example, the following behavior may be surprising:
     #
     #   User.transaction do
-    #     User.create(:username => 'Kotori')
+    #     User.create(username: 'Kotori')
     #     User.transaction do
-    #       User.create(:username => 'Nemu')
+    #       User.create(username: 'Nemu')
     #       raise ActiveRecord::Rollback
     #     end
     #   end
     #
-    #   User.find(:all)  # => empty
+    # creates both "Kotori" and "Nemu". Reason is the <tt>ActiveRecord::Rollback</tt>
+    # exception in the nested block does not issue a ROLLBACK. Since these exceptions
+    # are captured in transaction blocks, the parent block does not see it and the
+    # real transaction is committed.
     #
-    # It is also possible to requires a sub-transaction by passing
-    # <tt>:requires_new => true</tt>. If anything goes wrong, the
-    # database rolls back to the beginning of the sub-transaction
-    # without rolling back the parent transaction. For example:
+    # In order to get a ROLLBACK for the nested transaction you may ask for a real
+    # sub-transaction by passing <tt>requires_new: true</tt>. If anything goes wrong,
+    # the database rolls back to the beginning of the sub-transaction without rolling
+    # back the parent transaction. If we add it to the previous example:
     #
     #   User.transaction do
-    #     User.create(:username => 'Kotori')
-    #     User.transaction(:requires_new => true) do
-    #       User.create(:username => 'Nemu')
+    #     User.create(username: 'Kotori')
+    #     User.transaction(requires_new: true) do
+    #       User.create(username: 'Nemu')
     #       raise ActiveRecord::Rollback
     #     end
     #   end
     #
-    #   User.find(:all)  # => Returns only Kotori
+    # only "Kotori" is created. (This works on MySQL and PostgreSQL, but not on SQLite3.)
     #
     # Most databases don't support true nested transactions. At the time of
     # writing, the only database that we're aware of that supports true nested
     # transactions, is MS-SQL. Because of this, Active Record emulates nested
-    # transactions by using savepoints. See
-    # http://dev.mysql.com/doc/refman/5.0/en/savepoints.html
+    # transactions by using savepoints on MySQL and PostgreSQL. See
+    # http://dev.mysql.com/doc/refman/5.6/en/savepoint.html
     # for more information about savepoints.
     #
     # === Callbacks
@@ -189,7 +195,7 @@ module ActiveRecord
     # automatically released. The following example demonstrates the problem:
     #
     #   Model.connection.transaction do                           # BEGIN
-    #     Model.connection.transaction(:requires_new => true) do  # CREATE SAVEPOINT active_record_1
+    #     Model.connection.transaction(requires_new: true) do  # CREATE SAVEPOINT active_record_1
     #       Model.connection.create_table(...)                    # active_record_1 now automatically released
     #     end                                                     # RELEASE savepoint active_record_1
     #                                                             # ^^^^ BOOM! database error!
@@ -202,11 +208,57 @@ module ActiveRecord
         # See the ConnectionAdapters::DatabaseStatements#transaction API docs.
         connection.transaction(options, &block)
       end
+
+      # This callback is called after a record has been created, updated, or destroyed.
+      #
+      # You can specify that the callback should only be fired by a certain action with
+      # the +:on+ option:
+      #
+      #   after_commit :do_foo, on: :create
+      #   after_commit :do_bar, on: :update
+      #   after_commit :do_baz, on: :destroy
+      #
+      #   after_commit :do_foo_bar, :on [:create, :update]
+      #   after_commit :do_bar_baz, :on [:update, :destroy]
+      #
+      # Note that transactional fixtures do not play well with this feature. Please
+      # use the +test_after_commit+ gem to have these hooks fired in tests.
+      def after_commit(*args, &block)
+        set_options_for_callbacks!(args)
+        set_callback(:commit, :after, *args, &block)
+      end
+
+      # This callback is called after a create, update, or destroy are rolled back.
+      #
+      # Please check the documentation of +after_commit+ for options.
+      def after_rollback(*args, &block)
+        set_options_for_callbacks!(args)
+        set_callback(:rollback, :after, *args, &block)
+      end
+
+      private
+
+      def set_options_for_callbacks!(args)
+        options = args.last
+        if options.is_a?(Hash) && options[:on]
+          assert_valid_transaction_action(options[:on])
+          options[:if] = Array(options[:if])
+          fire_on = Array(options[:on]).map(&:to_sym)
+          options[:if] << "transaction_include_any_action?(#{fire_on})"
+        end
+      end
+
+      def assert_valid_transaction_action(actions)
+        actions = Array(actions)
+        if (actions - ACTIONS).any?
+          raise ArgumentError, ":on conditions for after_commit and after_rollback callbacks have to be one of #{ACTIONS.join(",")}"
+        end
+      end
     end
 
     # See ActiveRecord::Transactions::ClassMethods for detailed documentation.
-    def transaction(&block)
-      self.class.transaction(&block)
+    def transaction(options = {}, &block)
+      self.class.transaction(options, &block)
     end
 
     def destroy #:nodoc:
@@ -235,15 +287,11 @@ module ActiveRecord
     end
 
     # Call the after_commit callbacks
+    #
+    # Ensure that it is not called if the object was never persisted (failed create),
+    # but call it after the commit of a destroyed object
     def committed! #:nodoc:
-      if transaction_record_state(:new_record)
-        _run_commit_on_create_callbacks
-      elsif transaction_record_state(:destroyed)
-        _run_commit_on_destroy_callbacks
-      else
-        _run_commit_on_update_callbacks
-      end
-      _run_commit_callbacks
+      run_callbacks :commit if destroyed? || persisted?
     ensure
       clear_transaction_record_state
     end
@@ -251,14 +299,7 @@ module ActiveRecord
     # Call the after rollback callbacks. The restore_state argument indicates if the record
     # state should be rolled back to the beginning or just to the last savepoint.
     def rolledback!(force_restore_state = false) #:nodoc:
-      if transaction_record_state(:new_record)
-        _run_rollback_on_create_callbacks
-      elsif transaction_record_state(:destroyed)
-        _run_rollback_on_destroy_callbacks
-      else
-        _run_rollback_on_update_callbacks
-      end
-      _run_rollback_callbacks
+      run_callbacks :rollback
     ensure
       restore_transaction_record_state(force_restore_state)
     end
@@ -281,7 +322,13 @@ module ActiveRecord
       status = nil
       self.class.transaction do
         add_to_transaction
-        status = yield
+        begin
+          status = yield
+        rescue ActiveRecord::Rollback
+          @_start_transaction_state[:level] = (@_start_transaction_state[:level] || 0) - 1
+          status = nil
+        end
+
         raise ActiveRecord::Rollback unless status
       end
       status
@@ -290,49 +337,59 @@ module ActiveRecord
     protected
 
     # Save the new record state and id of a record so it can be restored later if a transaction fails.
-    def remember_transaction_record_state #:nodoc
-      @_start_transaction_state ||= {}
-      unless @_start_transaction_state.include?(:new_record)
-        @_start_transaction_state[:id] = id if has_attribute?(self.class.primary_key)
-        @_start_transaction_state[:new_record] = @new_record
-      end
-      unless @_start_transaction_state.include?(:destroyed)
-        @_start_transaction_state[:destroyed] = @new_record
-      end
+    def remember_transaction_record_state #:nodoc:
+      @_start_transaction_state[:id] = id if has_attribute?(self.class.primary_key)
+      @_start_transaction_state[:new_record] = @new_record
+      @_start_transaction_state[:destroyed] = @destroyed
       @_start_transaction_state[:level] = (@_start_transaction_state[:level] || 0) + 1
+      @_start_transaction_state[:frozen?] = @attributes.frozen?
     end
 
     # Clear the new record state and id of a record.
-    def clear_transaction_record_state #:nodoc
-      if defined?(@_start_transaction_state)
-        @_start_transaction_state[:level] = (@_start_transaction_state[:level] || 0) - 1
-        remove_instance_variable(:@_start_transaction_state) if @_start_transaction_state[:level] < 1
-      end
+    def clear_transaction_record_state #:nodoc:
+      @_start_transaction_state[:level] = (@_start_transaction_state[:level] || 0) - 1
+      @_start_transaction_state.clear if @_start_transaction_state[:level] < 1
     end
 
     # Restore the new record state and id of a record that was previously saved by a call to save_record_state.
-    def restore_transaction_record_state(force = false) #:nodoc
-      if defined?(@_start_transaction_state)
+    def restore_transaction_record_state(force = false) #:nodoc:
+      unless @_start_transaction_state.empty?
         @_start_transaction_state[:level] = (@_start_transaction_state[:level] || 0) - 1
-        if @_start_transaction_state[:level] < 1
-          restore_state = remove_instance_variable(:@_start_transaction_state)
-          if restore_state
-            @new_record = restore_state[:new_record]
-            @destroyed = restore_state[:destroyed]
-            if restore_state[:id]
-              self.id = restore_state[:id]
-            else
-              @attributes.delete(self.class.primary_key)
-              @attributes_cache.delete(self.class.primary_key)
-            end
+        if @_start_transaction_state[:level] < 1 || force
+          restore_state = @_start_transaction_state
+          was_frozen = restore_state[:frozen?]
+          @attributes = @attributes.dup if @attributes.frozen?
+          @new_record = restore_state[:new_record]
+          @destroyed  = restore_state[:destroyed]
+          if restore_state.has_key?(:id)
+            self.id = restore_state[:id]
+          else
+            @attributes.delete(self.class.primary_key)
+            @attributes_cache.delete(self.class.primary_key)
           end
+          @attributes.freeze if was_frozen
+          @_start_transaction_state.clear
         end
       end
     end
 
     # Determine if a record was created or destroyed in a transaction. State should be one of :new_record or :destroyed.
-    def transaction_record_state(state) #:nodoc
-      @_start_transaction_state[state] if defined?(@_start_transaction_state)
+    def transaction_record_state(state) #:nodoc:
+      @_start_transaction_state[state]
+    end
+
+    # Determine if a transaction included an action for :create, :update, or :destroy. Used in filtering callbacks.
+    def transaction_include_any_action?(actions) #:nodoc:
+      actions.any? do |action|
+        case action
+        when :create
+          transaction_record_state(:new_record)
+        when :destroy
+          destroyed?
+        when :update
+          !(transaction_record_state(:new_record) || destroyed?)
+        end
+      end
     end
   end
 end

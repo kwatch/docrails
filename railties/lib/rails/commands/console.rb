@@ -4,52 +4,98 @@ require 'irb/completion'
 
 module Rails
   class Console
-    def self.start(app)
-      new(app).start
+    class << self
+      def start(*args)
+        new(*args).start
+      end
+
+      def parse_arguments(arguments)
+        options = {}
+
+        OptionParser.new do |opt|
+          opt.banner = "Usage: rails console [environment] [options]"
+          opt.on('-s', '--sandbox', 'Rollback database modifications on exit.') { |v| options[:sandbox] = v }
+          opt.on("-e", "--environment=name", String,
+                  "Specifies the environment to run this console under (test/development/production).",
+                  "Default: development") { |v| options[:environment] = v.strip }
+          opt.on("--debugger", 'Enable the debugger.') { |v| options[:debugger] = v }
+          opt.parse!(arguments)
+        end
+
+        if arguments.first && arguments.first[0] != '-'
+          env = arguments.first
+          if available_environments.include? env
+            options[:environment] = env
+          else
+            options[:environment] = %w(production development test).detect {|e| e =~ /^#{env}/} || env
+          end
+        end
+
+        options
+      end
+
+      private
+
+        def available_environments
+          Dir['config/environments/*.rb'].map { |fname| File.basename(fname, '.*') }
+        end
     end
 
-    def initialize(app)
-      @app = app
+    attr_reader :options, :app, :console
+
+    def initialize(app, options={})
+      @app     = app
+      @options = options
+
+      app.sandbox = sandbox?
+      app.load_console
+
+      @console = app.config.console || IRB
+    end
+
+    def sandbox?
+      options[:sandbox]
+    end
+
+    def environment
+      options[:environment] ||= ENV['RAILS_ENV'] || ENV['RACK_ENV'] || 'development'
+    end
+
+    def environment?
+      environment
+    end
+
+    def set_environment!
+      Rails.env = environment
+    end
+
+    def debugger?
+      options[:debugger]
     end
 
     def start
-      options = {}
+      require_debugger if debugger?
+      set_environment! if environment?
 
-      OptionParser.new do |opt|
-        opt.banner = "Usage: console [environment] [options]"
-        opt.on('-s', '--sandbox', 'Rollback database modifications on exit.') { |v| options[:sandbox] = v }
-        opt.on("--debugger", 'Enable ruby-debugging for the console.') { |v| options[:debugger] = v }
-        opt.on('--irb', "DEPRECATED: Invoke `/your/choice/of/ruby script/rails console` instead") { |v| abort '--irb option is no longer supported. Invoke `/your/choice/of/ruby script/rails console` instead' }
-        opt.parse!(ARGV)
-      end
-
-      @app.initialize!
-      require "rails/console/app"
-      require "rails/console/sandbox" if options[:sandbox]
-      require "rails/console/helpers"
-
-      if options[:debugger]
-        begin
-          require 'ruby-debug'
-          puts "=> Debugger enabled"
-        rescue Exception
-          puts "You need to install ruby-debug to run the console in debugging mode. With gems, use 'gem install ruby-debug'"
-          exit
-        end
-      end
-
-      if options[:sandbox]
+      if sandbox?
         puts "Loading #{Rails.env} environment in sandbox (Rails #{Rails.version})"
         puts "Any modifications you make will be rolled back on exit"
       else
         puts "Loading #{Rails.env} environment (Rails #{Rails.version})"
       end
-      IRB.start
+
+      if defined?(console::ExtendCommandBundle)
+        console::ExtendCommandBundle.send :include, Rails::ConsoleMethods
+      end
+      console.start
+    end
+
+    def require_debugger
+      require 'debugger'
+      puts "=> Debugger enabled"
+    rescue LoadError
+      puts "You're missing the 'debugger' gem. Add it to your Gemfile, bundle, and try again."
+      exit
     end
   end
-end
-
-# Has to set the RAILS_ENV before config/application is required
-if ARGV.first && !ARGV.first.index("-") && env = ARGV.pop # has to pop the env ARGV so IRB doesn't freak
-  ENV['RAILS_ENV'] = %w(production development test).find { |e| e.index(env) } || env
 end

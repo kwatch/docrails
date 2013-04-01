@@ -1,6 +1,6 @@
 require 'isolation/abstract_unit'
 
-class ConsoleTest < Test::Unit::TestCase
+class ConsoleTest < ActiveSupport::TestCase
   include ActiveSupport::Testing::Isolation
 
   def setup
@@ -8,38 +8,44 @@ class ConsoleTest < Test::Unit::TestCase
     boot_rails
   end
 
-  def load_environment
-    # Load steps taken from rails/commands/console.rb
+  def teardown
+    teardown_app
+  end
+
+  def load_environment(sandbox = false)
     require "#{rails_root}/config/environment"
-    require 'rails/console/app'
-    require 'rails/console/helpers'
+    Rails.application.sandbox = sandbox
+    Rails.application.load_console
+  end
+
+  def irb_context
+    Object.new.extend(Rails::ConsoleMethods)
   end
 
   def test_app_method_should_return_integration_session
+    TestHelpers::Rack.send :remove_method, :app
     load_environment
-    console_session = app
-    assert_not_nil console_session
-    assert_instance_of ActionController::Integration::Session, console_session
+    console_session = irb_context.app
+    assert_instance_of ActionDispatch::Integration::Session, console_session
   end
 
   def test_new_session_should_return_integration_session
     load_environment
-    session = new_session
-    assert_not_nil session
-    assert_instance_of ActionController::Integration::Session, session
+    session = irb_context.new_session
+    assert_instance_of ActionDispatch::Integration::Session, session
   end
 
-  def test_reload_should_fire_preparation_callbacks
+  def test_reload_should_fire_preparation_and_cleanup_callbacks
     load_environment
     a = b = c = nil
 
     # TODO: These should be defined on the initializer
-    ActionDispatch::Callbacks.to_prepare { a = b = c = 1 }
-    ActionDispatch::Callbacks.to_prepare { b = c = 2 }
-    ActionDispatch::Callbacks.to_prepare { c = 3 }
+    ActionDispatch::Reloader.to_cleanup { a = b = c = 1 }
+    ActionDispatch::Reloader.to_cleanup { b = c = 2 }
+    ActionDispatch::Reloader.to_prepare { c = 3 }
 
     # Hide Reloading... output
-    silence_stream(STDOUT) { reload! }
+    silence_stream(STDOUT) { irb_context.reload! }
 
     assert_equal 1, a
     assert_equal 2, b
@@ -55,7 +61,6 @@ class ConsoleTest < Test::Unit::TestCase
 
     load_environment
     assert User.new.respond_to?(:name)
-    assert !User.new.respond_to?(:age)
 
     app_file "app/models/user.rb", <<-MODEL
       class User
@@ -64,15 +69,94 @@ class ConsoleTest < Test::Unit::TestCase
     MODEL
 
     assert !User.new.respond_to?(:age)
-    silence_stream(STDOUT) { reload! }
+    silence_stream(STDOUT) { irb_context.reload! }
     assert User.new.respond_to?(:age)
   end
 
   def test_access_to_helpers
     load_environment
+    helper = irb_context.helper
     assert_not_nil helper
     assert_instance_of ActionView::Base, helper
     assert_equal 'Once upon a time in a world...',
       helper.truncate('Once upon a time in a world far far away')
+  end
+end
+
+begin
+  require "pty"
+rescue LoadError
+end
+
+class FullStackConsoleTest < ActiveSupport::TestCase
+  def setup
+    skip "PTY unavailable" unless defined?(PTY) && PTY.respond_to?(:open)
+
+    build_app
+    app_file 'app/models/post.rb', <<-CODE
+      class Post < ActiveRecord::Base
+      end
+    CODE
+    system "#{app_path}/bin/rails runner 'Post.connection.create_table :posts'"
+
+    @master, @slave = PTY.open
+  end
+
+  def teardown
+    teardown_app
+  end
+
+  def assert_output(expected, timeout = 5)
+    timeout = Time.now + timeout
+
+    output = ""
+    until output.include?(expected) || Time.now > timeout
+      if IO.select([@master], [], [], 0.1)
+        output << @master.readpartial(100)
+      end
+    end
+
+    assert output.include?(expected), "#{expected.inspect} expected, but got:\n\n#{output}"
+  end
+
+  def write_prompt(command, expected_output = nil)
+    @master.puts command
+    assert_output command
+    assert_output expected_output if expected_output
+    assert_output "> "
+  end
+
+  def kill(pid)
+    Process.kill('QUIT', pid)
+    Process.wait(pid)
+  rescue Errno::ESRCH
+  end
+
+  def spawn_console
+    pid = Process.spawn(
+      "#{app_path}/bin/rails console --sandbox",
+      in: @slave, out: @slave, err: @slave
+    )
+
+    assert_output "> ", 30
+    pid
+  end
+
+  def test_sandbox
+    pid = spawn_console
+
+    write_prompt "Post.count", "=> 0"
+    write_prompt "Post.create"
+    write_prompt "Post.count", "=> 1"
+
+    kill pid
+
+    pid = spawn_console
+
+    write_prompt "Post.count", "=> 0"
+    write_prompt "Post.transaction { Post.create; raise }"
+    write_prompt "Post.count", "=> 0"
+  ensure
+    kill pid if pid
   end
 end

@@ -1,86 +1,34 @@
 require 'abstract_unit'
+require 'controller/fake_models'
 
-class Comment
-  extend ActiveModel::Naming
-  include ActiveModel::Conversion
-
-  attr_reader :id
-  def to_key; id ? [id] : nil end
-  def save; @id = 1 end
-  def new_record?; @id.nil? end
-  def name
-    @id.nil? ? 'new comment' : "comment ##{@id}"
-  end
-end
-
-class Comment::Nested < Comment; end
-
-class Test::Unit::TestCase
-  protected
-    def comments_url
-      'http://www.example.com/comments'
-    end
-    
-    def comment_url(comment)
-      "http://www.example.com/comments/#{comment.id}"
-    end
-end
-
-
-class RecordIdentifierTest < Test::Unit::TestCase
+class ControllerRecordIdentifierTest < ActiveSupport::TestCase
   include ActionController::RecordIdentifier
 
   def setup
-    @klass  = Comment
-    @record = @klass.new
-    @singular = 'comment'
-    @plural = 'comments'
+    @record = Comment.new
   end
 
-  def test_dom_id_with_new_record
-    assert_equal "new_#{@singular}", dom_id(@record)
-  end
-
-  def test_dom_id_with_new_record_and_prefix
-    assert_equal "custom_prefix_#{@singular}", dom_id(@record, :custom_prefix)
-  end
-
-  def test_dom_id_with_saved_record
-    @record.save
-    assert_equal "#{@singular}_1", dom_id(@record)
-  end
-
-  def test_dom_id_with_prefix
-    @record.save
-    assert_equal "edit_#{@singular}_1", dom_id(@record, :edit)
-  end
-
-  def test_dom_class
-    assert_equal @singular, dom_class(@record)
-  end
-  
-  def test_dom_class_with_prefix
-    assert_equal "custom_prefix_#{@singular}", dom_class(@record, :custom_prefix)
-  end
-
-  def test_singular_class_name
-    assert_equal @singular, singular_class_name(@record)
-  end
-
-  def test_singular_class_name_for_class
-    assert_equal @singular, singular_class_name(@klass)
-  end
-
-  def test_plural_class_name
-    assert_equal @plural, plural_class_name(@record)
-  end
-
-  def test_plural_class_name_for_class
-    assert_equal @plural, plural_class_name(@klass)
-  end
-
-  private
-    def method_missing(method, *args)
-      RecordIdentifier.send(method, *args)
+  def test_dom_id_deprecation
+    assert_deprecated(/dom_id method will no longer be included by default in controllers/) do
+      dom_id(@record)
     end
+  end
+
+  def test_dom_class_deprecation
+    assert_deprecated(/dom_class method will no longer be included by default in controllers/) do
+      dom_class(@record)
+    end
+  end
+
+  def test_dom_id_from_module_deprecation
+    assert_deprecated(/Calling ActionController::RecordIdentifier.dom_id is deprecated/) do
+      ActionController::RecordIdentifier.dom_id(@record)
+    end
+  end
+
+  def test_dom_class_from_module_deprecation
+    assert_deprecated(/Calling ActionController::RecordIdentifier.dom_class is deprecated/) do
+      ActionController::RecordIdentifier.dom_class(@record)
+    end
+  end
 end

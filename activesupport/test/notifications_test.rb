@@ -1,24 +1,47 @@
 require 'abstract_unit'
+require 'active_support/core_ext/module/delegation'
 
 module Notifications
   class TestCase < ActiveSupport::TestCase
     def setup
-      ActiveSupport::Notifications.notifier = nil
-      @notifier = ActiveSupport::Notifications.notifier
+      @old_notifier = ActiveSupport::Notifications.notifier
+      @notifier = ActiveSupport::Notifications::Fanout.new
+      ActiveSupport::Notifications.notifier = @notifier
       @events = []
       @named_events = []
       @subscription = @notifier.subscribe { |*args| @events << event(*args) }
       @named_subscription = @notifier.subscribe("named.subscription") { |*args| @named_events << event(*args) }
     end
 
-    private
-      def event(*args)
-        ActiveSupport::Notifications::Event.new(*args)
-      end
+    def teardown
+      ActiveSupport::Notifications.notifier = @old_notifier
+    end
 
-      def drain
-        @notifier.wait
+  private
+
+    def event(*args)
+      ActiveSupport::Notifications::Event.new(*args)
+    end
+  end
+
+  class SubscribedTest < TestCase
+    def test_subscribed
+      name     = "foo"
+      name2    = name * 2
+      expected = [name, name]
+
+      events   = []
+      callback = lambda {|*_| events << _.first}
+      ActiveSupport::Notifications.subscribed(callback, name) do
+        ActiveSupport::Notifications.instrument(name)
+        ActiveSupport::Notifications.instrument(name2)
+        ActiveSupport::Notifications.instrument(name)
       end
+      assert_equal expected, events
+
+      ActiveSupport::Notifications.instrument(name)
+      assert_equal expected, events
+    end
   end
 
   class UnsubscribeTest < TestCase
@@ -132,13 +155,10 @@ module Notifications
 
     def test_instrument_returns_block_result
       assert_equal 2, instrument(:awesome) { 1 + 1 }
-      drain
     end
 
     def test_instrument_yields_the_paylod_for_further_modification
       assert_equal 2, instrument(:awesome) { |p| p[:result] = 1 + 1 }
-      drain
-
       assert_equal 1, @events.size
       assert_equal :awesome, @events.first.name
       assert_equal Hash[:result => 2], @events.first.payload
@@ -154,14 +174,10 @@ module Notifications
           1 + 1
         end
 
-        drain
-
         assert_equal 1, @events.size
         assert_equal :wot, @events.first.name
         assert_equal Hash[:payload => "child"], @events.first.payload
       end
-
-      drain
 
       assert_equal 2, @events.size
       assert_equal :awesome, @events.last.name
@@ -177,7 +193,6 @@ module Notifications
         assert_equal "FAIL", e.message
       end
 
-      drain
       assert_equal 1, @events.size
       assert_equal Hash[:payload => "notifications",
         :exception => ["RuntimeError", "FAIL"]], @events.last.payload
@@ -185,8 +200,6 @@ module Notifications
 
     def test_event_is_pushed_even_without_block
       instrument(:awesome, :payload => "notifications")
-      drain
-
       assert_equal 1, @events.size
       assert_equal :awesome, @events.last.name
       assert_equal Hash[:payload => "notifications"], @events.last.payload
@@ -198,9 +211,9 @@ module Notifications
       time = Time.now
       event = event(:foo, time, time + 0.01, random_id, {})
 
-      assert_equal :foo, event.name
-      assert_equal time, event.time
-      assert_equal 10.0, event.duration
+      assert_equal    :foo, event.name
+      assert_equal    time, event.time
+      assert_in_delta 10.0, event.duration, 0.00001
     end
 
     def test_events_consumes_information_given_as_payload
@@ -208,12 +221,14 @@ module Notifications
       assert_equal Hash[:payload => :bar], event.payload
     end
 
-    def test_event_is_parent_based_on_time_frame
+    def test_event_is_parent_based_on_children
       time = Time.utc(2009, 01, 01, 0, 0, 1)
 
       parent    = event(:foo, Time.utc(2009), Time.utc(2009) + 100, random_id, {})
       child     = event(:foo, time, time + 10, random_id, {})
       not_child = event(:foo, time, time + 100, random_id, {})
+
+      parent.children << child
 
       assert parent.parent_of?(child)
       assert !child.parent_of?(parent)
@@ -223,7 +238,7 @@ module Notifications
 
     protected
       def random_id
-        @random_id ||= ActiveSupport::SecureRandom.hex(10)
+        @random_id ||= SecureRandom.hex(10)
       end
   end
 end

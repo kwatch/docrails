@@ -1,10 +1,11 @@
 require 'cases/helper'
 require 'models/post'
+require 'models/tag'
 require 'models/author'
 require 'models/comment'
 require 'models/category'
 require 'models/categorization'
-require 'active_support/core_ext/array/random_access'
+require 'models/tagging'
 
 module Remembered
   extend ActiveSupport::Concern
@@ -17,7 +18,7 @@ module Remembered
 
   module ClassMethods
     def remembered; @@remembered ||= []; end
-    def random_element; @@remembered.random_element; end
+    def sample; @@remembered.sample; end
   end
 end
 
@@ -79,20 +80,19 @@ class EagerLoadPolyAssocsTest < ActiveRecord::TestCase
       [Circle, Square, Triangle, NonPolyOne, NonPolyTwo].map(&:create!)
     end
     1.upto(NUM_SIMPLE_OBJS) do
-      PaintColor.create!(:non_poly_one_id => NonPolyOne.random_element.id)
-      PaintTexture.create!(:non_poly_two_id => NonPolyTwo.random_element.id)
+      PaintColor.create!(:non_poly_one_id => NonPolyOne.sample.id)
+      PaintTexture.create!(:non_poly_two_id => NonPolyTwo.sample.id)
     end
     1.upto(NUM_SHAPE_EXPRESSIONS) do
-      shape_type = [Circle, Square, Triangle].random_element
-      paint_type = [PaintColor, PaintTexture].random_element
-      ShapeExpression.create!(:shape_type => shape_type.to_s, :shape_id => shape_type.random_element.id,
-                              :paint_type => paint_type.to_s, :paint_id => paint_type.random_element.id)
+      shape_type = [Circle, Square, Triangle].sample
+      paint_type = [PaintColor, PaintTexture].sample
+      ShapeExpression.create!(:shape_type => shape_type.to_s, :shape_id => shape_type.sample.id,
+                              :paint_type => paint_type.to_s, :paint_id => paint_type.sample.id)
     end
   end
 
   def test_include_query
-    res = 0
-    res = ShapeExpression.find :all, :include => [ :shape, { :paint => :non_poly } ]
+    res = ShapeExpression.all.merge!(:includes => [ :shape, { :paint => :non_poly } ]).to_a
     assert_equal NUM_SHAPE_EXPRESSIONS, res.size
     assert_queries(0) do
       res.each do |se|
@@ -122,7 +122,7 @@ class EagerLoadNestedIncludeWithMissingDataTest < ActiveRecord::TestCase
     assert_nothing_raised do
       # @davey_mcdave doesn't have any author_favorites
       includes = {:posts => :comments, :categorizations => :category, :author_favorites => :favorite_author }
-      Author.all :include => includes, :conditions => {:authors => {:name => @davey_mcdave.name}}, :order => 'categories.name'
+      Author.all.merge!(:includes => includes, :where => {:authors => {:name => @davey_mcdave.name}}, :order => 'categories.name').to_a
     end
   end
 end

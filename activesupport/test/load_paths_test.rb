@@ -1,6 +1,6 @@
 require 'abstract_unit'
 
-class LoadPathsTest < Test::Unit::TestCase
+class LoadPathsTest < ActiveSupport::TestCase
   def test_uniq_load_paths
     load_paths_count = $LOAD_PATH.inject({}) { |paths, path|
       expanded_path = File.expand_path(path)
@@ -8,8 +8,9 @@ class LoadPathsTest < Test::Unit::TestCase
       paths[expanded_path] += 1
       paths
     }
+    load_paths_count[File.expand_path('../../lib', __FILE__)] -= 1
 
-    # CI has a bunch of duplicate load paths
-    # assert_equal [], load_paths_count.select { |k, v| v > 1 }, $LOAD_PATH.inspect
+    filtered = load_paths_count.select { |k, v| v > 1 }
+    assert filtered.empty?, filtered.inspect
   end
 end

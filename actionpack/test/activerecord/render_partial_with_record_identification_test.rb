@@ -11,12 +11,12 @@ class RenderPartialWithRecordIdentificationController < ActionController::Base
     render :partial => @topic.replies
   end
 
-  def render_with_named_scope
+  def render_with_scope
     render :partial => Reply.base
   end
 
   def render_with_has_many_through_association
-    @developer = Developer.find(:first)
+    @developer = Developer.first
     render :partial => @developer.topics
   end
 
@@ -31,12 +31,12 @@ class RenderPartialWithRecordIdentificationController < ActionController::Base
   end
 
   def render_with_record
-    @developer = Developer.find(:first)
+    @developer = Developer.first
     render :partial => @developer
   end
 
   def render_with_record_collection
-    @developers = Developer.find(:all)
+    @developers = Developer.all
     render :partial => @developers
   end
 
@@ -62,8 +62,8 @@ class RenderPartialWithRecordIdentificationTest < ActiveRecordTestCase
     assert_equal 'Birdman is better!', @response.body
   end
 
-  def test_rendering_partial_with_named_scope
-    get :render_with_named_scope
+  def test_rendering_partial_with_scope
+    get :render_with_scope
     assert_template 'replies/_reply'
     assert_equal 'Birdman is better!Nuh uh!', @response.body
   end
@@ -90,38 +90,6 @@ class RenderPartialWithRecordIdentificationTest < ActiveRecordTestCase
     get :render_with_has_one_association
     assert_template 'mascots/_mascot'
     assert_equal mascot.name, @response.body
-  end
-end
-
-class RenderPartialWithRecordIdentificationController < ActionController::Base
-  def render_with_has_many_and_belongs_to_association
-    @developer = Developer.find(1)
-    render :partial => @developer.projects
-  end
-
-  def render_with_has_many_association
-    @topic = Topic.find(1)
-    render :partial => @topic.replies
-  end
-
-  def render_with_has_many_through_association
-    @developer = Developer.find(:first)
-    render :partial => @developer.topics
-  end
-
-  def render_with_belongs_to_association
-    @reply = Reply.find(1)
-    render :partial => @reply.topic
-  end
-
-  def render_with_record
-    @developer = Developer.find(:first)
-    render :partial => @developer
-  end
-
-  def render_with_record_collection
-    @developers = Developer.find(:all)
-    render :partial => @developers
   end
 end
 
@@ -162,14 +130,40 @@ class RenderPartialWithRecordIdentificationAndNestedControllersTest < ActiveReco
 
   def test_render_with_record_in_nested_controller
     get :render_with_record_in_nested_controller
-    assert_template 'fun/games/_game'
-    assert_equal 'Pong', @response.body
+    assert_template %r{\Afun/games/_game\Z}
+    assert_equal "Fun Pong\n", @response.body
   end
 
   def test_render_with_record_collection_in_nested_controller
     get :render_with_record_collection_in_nested_controller
-    assert_template 'fun/games/_game'
-    assert_equal 'PongTank', @response.body
+    assert_template %r{\Afun/games/_game\Z}
+    assert_equal "Fun Pong\nFun Tank\n", @response.body
+  end
+end
+
+class RenderPartialWithRecordIdentificationAndNestedControllersWithoutPrefixTest < ActiveRecordTestCase
+  tests Fun::NestedController
+
+  def test_render_with_record_in_nested_controller
+    old_config = ActionView::Base.prefix_partial_path_with_controller_namespace
+    ActionView::Base.prefix_partial_path_with_controller_namespace = false
+
+    get :render_with_record_in_nested_controller
+    assert_template %r{\Agames/_game\Z}
+    assert_equal "Just Pong\n", @response.body
+  ensure
+    ActionView::Base.prefix_partial_path_with_controller_namespace = old_config
+  end
+
+  def test_render_with_record_collection_in_nested_controller
+    old_config = ActionView::Base.prefix_partial_path_with_controller_namespace
+    ActionView::Base.prefix_partial_path_with_controller_namespace = false
+
+    get :render_with_record_collection_in_nested_controller
+    assert_template %r{\Agames/_game\Z}
+    assert_equal "Just Pong\nJust Tank\n", @response.body
+  ensure
+    ActionView::Base.prefix_partial_path_with_controller_namespace = old_config
   end
 end
 
@@ -178,13 +172,39 @@ class RenderPartialWithRecordIdentificationAndNestedDeeperControllersTest < Acti
 
   def test_render_with_record_in_deeper_nested_controller
     get :render_with_record_in_deeper_nested_controller
-    assert_template 'fun/serious/games/_game'
-    assert_equal 'Chess', @response.body
+    assert_template %r{\Afun/serious/games/_game\Z}
+    assert_equal "Serious Chess\n", @response.body
   end
 
   def test_render_with_record_collection_in_deeper_nested_controller
     get :render_with_record_collection_in_deeper_nested_controller
-    assert_template 'fun/serious/games/_game'
-    assert_equal 'ChessSudokuSolitaire', @response.body
+    assert_template %r{\Afun/serious/games/_game\Z}
+    assert_equal "Serious Chess\nSerious Sudoku\nSerious Solitaire\n", @response.body
+  end
+end
+
+class RenderPartialWithRecordIdentificationAndNestedDeeperControllersWithoutPrefixTest < ActiveRecordTestCase
+  tests Fun::Serious::NestedDeeperController
+
+  def test_render_with_record_in_deeper_nested_controller
+    old_config = ActionView::Base.prefix_partial_path_with_controller_namespace
+    ActionView::Base.prefix_partial_path_with_controller_namespace = false
+
+    get :render_with_record_in_deeper_nested_controller
+    assert_template %r{\Agames/_game\Z}
+    assert_equal "Just Chess\n", @response.body
+  ensure
+    ActionView::Base.prefix_partial_path_with_controller_namespace = old_config
+  end
+
+  def test_render_with_record_collection_in_deeper_nested_controller
+    old_config = ActionView::Base.prefix_partial_path_with_controller_namespace
+    ActionView::Base.prefix_partial_path_with_controller_namespace = false
+
+    get :render_with_record_collection_in_deeper_nested_controller
+    assert_template %r{\Agames/_game\Z}
+    assert_equal "Just Chess\nJust Sudoku\nJust Solitaire\n", @response.body
+  ensure
+    ActionView::Base.prefix_partial_path_with_controller_namespace = old_config
   end
 end

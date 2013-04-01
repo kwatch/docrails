@@ -7,11 +7,37 @@ module Fun
     # :ported:
     def hello_world
     end
+
+    def nested_partial_with_form_builder
+      render :partial => ActionView::Helpers::FormBuilder.new(:post, nil, view_context, {})
+    end
+  end
+end
+
+module Quiz
+  class QuestionsController < ActionController::Base
+    def new
+      render :partial => Quiz::Question.new("Namespaced Partial")
+    end
+  end
+end
+
+class TestControllerWithExtraEtags < ActionController::Base
+  etag { nil  }
+  etag { 'ab' }
+  etag { :cde }
+  etag { [:f] }
+  etag { nil  }
+
+  def fresh
+    render text: "stale" if stale?(etag: '123')
   end
 end
 
 class TestController < ActionController::Base
   protect_from_forgery
+
+  before_action :set_variable_for_layout
 
   class LabellingFormBuilder < ActionView::Helpers::FormBuilder
   end
@@ -29,7 +55,7 @@ class TestController < ActionController::Base
   end
 
   def hello_world_file
-    render :file => File.expand_path("../../fixtures/hello.html", __FILE__)
+    render :file => File.expand_path("../../fixtures/hello", __FILE__), :formats => [:html]
   end
 
   def conditional_hello
@@ -38,8 +64,24 @@ class TestController < ActionController::Base
     end
   end
 
+  def conditional_hello_with_record
+    record = Struct.new(:updated_at, :cache_key).new(Time.now.utc.beginning_of_day, "foo/123")
+
+    if stale?(record)
+      render :action => 'hello_world'
+    end
+  end
+
   def conditional_hello_with_public_header
     if stale?(:last_modified => Time.now.utc.beginning_of_day, :etag => [:foo, 123], :public => true)
+      render :action => 'hello_world'
+    end
+  end
+
+  def conditional_hello_with_public_header_with_record
+    record = Struct.new(:updated_at, :cache_key).new(Time.now.utc.beginning_of_day, "foo/123")
+
+    if stale?(record, :public => true)
       render :action => 'hello_world'
     end
   end
@@ -61,13 +103,23 @@ class TestController < ActionController::Base
     render :action => 'hello_world'
   end
 
+  def conditional_hello_with_expires_in_with_must_revalidate
+    expires_in 1.minute, :must_revalidate => true
+    render :action => 'hello_world'
+  end
+
+  def conditional_hello_with_expires_in_with_public_and_must_revalidate
+    expires_in 1.minute, :public => true, :must_revalidate => true
+    render :action => 'hello_world'
+  end
+
   def conditional_hello_with_expires_in_with_public_with_more_keys
-    expires_in 1.minute, :public => true, 'max-stale' => 5.hours
+    expires_in 1.minute, :public => true, 's-maxage' => 5.hours
     render :action => 'hello_world'
   end
 
   def conditional_hello_with_expires_in_with_public_with_more_keys_old_syntax
-    expires_in 1.minute, :public => true, :private => nil, 'max-stale' => 5.hours
+    expires_in 1.minute, :public => true, :private => nil, 's-maxage' => 5.hours
     render :action => 'hello_world'
   end
 
@@ -76,10 +128,16 @@ class TestController < ActionController::Base
     render :action => 'hello_world'
   end
 
+  def conditional_hello_with_cache_control_headers
+    response.headers['Cache-Control'] = 'no-transform'
+    expires_now
+    render :action => 'hello_world'
+  end
+
   def conditional_hello_with_bangs
     render :action => 'hello_world'
   end
-  before_filter :handle_last_modified_and_etags, :only=>:conditional_hello_with_bangs
+  before_action :handle_last_modified_and_etags, :only=>:conditional_hello_with_bangs
 
   def handle_last_modified_and_etags
     fresh_when(:last_modified => Time.now.utc.beginning_of_day, :etag => [ :foo, 123 ])
@@ -92,11 +150,6 @@ class TestController < ActionController::Base
 
   def render_hello_world_with_last_modified_set
     response.last_modified = Date.new(2008, 10, 10).to_time
-    render :template => "test/hello_world"
-  end
-
-  def render_hello_world_with_etag_set
-    response.etag = "hello_world"
     render :template => "test/hello_world"
   end
 
@@ -126,6 +179,10 @@ class TestController < ActionController::Base
     render :action => "hello_world"
   end
 
+  def render_action_upcased_hello_world
+    render :action => "Hello_world"
+  end
+
   def render_action_hello_world_as_string
     render "hello_world"
   end
@@ -141,7 +198,7 @@ class TestController < ActionController::Base
 
   # :ported:
   def render_text_hello_world_with_layout
-    @variable_for_layout = ", I'm here!"
+    @variable_for_layout = ", I am here!"
     render :text => "hello world", :layout => true
   end
 
@@ -152,14 +209,14 @@ class TestController < ActionController::Base
   # :ported:
   def render_file_with_instance_variables
     @secret = 'in the sauce'
-    path = File.join(File.dirname(__FILE__), '../fixtures/test/render_file_with_ivar.erb')
+    path = File.join(File.dirname(__FILE__), '../fixtures/test/render_file_with_ivar')
     render :file => path
   end
 
   # :ported:
   def render_file_as_string_with_instance_variables
     @secret = 'in the sauce'
-    path = File.expand_path(File.join(File.dirname(__FILE__), '../fixtures/test/render_file_with_ivar.erb'))
+    path = File.expand_path(File.join(File.dirname(__FILE__), '../fixtures/test/render_file_with_ivar'))
     render path
   end
 
@@ -176,21 +233,21 @@ class TestController < ActionController::Base
 
   def render_file_using_pathname
     @secret = 'in the sauce'
-    render :file => Pathname.new(File.dirname(__FILE__)).join('..', 'fixtures', 'test', 'dot.directory', 'render_file_with_ivar.erb')
+    render :file => Pathname.new(File.dirname(__FILE__)).join('..', 'fixtures', 'test', 'dot.directory', 'render_file_with_ivar')
   end
 
   def render_file_from_template
     @secret = 'in the sauce'
-    @path = File.expand_path(File.join(File.dirname(__FILE__), '../fixtures/test/render_file_with_ivar.erb'))
+    @path = File.expand_path(File.join(File.dirname(__FILE__), '../fixtures/test/render_file_with_ivar'))
   end
 
   def render_file_with_locals
-    path = File.join(File.dirname(__FILE__), '../fixtures/test/render_file_with_locals.erb')
+    path = File.join(File.dirname(__FILE__), '../fixtures/test/render_file_with_locals')
     render :file => path, :locals => {:secret => 'in the sauce'}
   end
 
   def render_file_as_string_with_locals
-    path = File.expand_path(File.join(File.dirname(__FILE__), '../fixtures/test/render_file_with_locals.erb'))
+    path = File.expand_path(File.join(File.dirname(__FILE__), '../fixtures/test/render_file_with_locals'))
     render path, :locals => {:secret => 'in the sauce'}
   end
 
@@ -272,10 +329,11 @@ class TestController < ActionController::Base
 
   # :ported:
   def builder_layout_test
+    @name = nil
     render :action => "hello", :layout => "layouts/builder"
   end
 
-  # :move: test this in ActionView
+  # :move: test this in Action View
   def builder_partial_test
     render :action => "hello_world_container"
   end
@@ -323,6 +381,7 @@ class TestController < ActionController::Base
   end
 
   def default_render
+    @alternate_default_render ||= nil
     if @alternate_default_render
       @alternate_default_render.call
     else
@@ -388,6 +447,14 @@ class TestController < ActionController::Base
     render :template => "test/hello_world"
   end
 
+  def render_with_explicit_unescaped_template
+    render :template => "test/h*llo_world"
+  end
+
+  def render_with_explicit_escaped_template
+    render :template => "test/hello,world"
+  end
+
   def render_with_explicit_string_template
     render "test/hello_world"
   end
@@ -428,17 +495,13 @@ class TestController < ActionController::Base
     render :action => "potential_conflicts"
   end
 
-  # :deprecated:
-  # Tests being able to pick a .builder template over a .erb
-  # For instance, being able to have hello.xml.builder and hello.xml.erb
-  # and select one via "hello.builder" or "hello.erb"
   def hello_world_from_rxml_using_action
-    render :action => "hello_world_from_rxml.builder"
+    render :action => "hello_world_from_rxml", :handlers => [:builder]
   end
 
   # :deprecated:
   def hello_world_from_rxml_using_template
-    render :template => "test/hello_world_from_rxml.builder"
+    render :template => "test/hello_world_from_rxml", :handlers => [:builder]
   end
 
   def action_talk_to_layout
@@ -458,6 +521,18 @@ class TestController < ActionController::Base
   def render_content_type_from_body
     response.content_type = Mime::RSS
     render :text => "hello world!"
+  end
+
+  def head_created
+    head :created
+  end
+
+  def head_created_with_application_json_content_type
+    head :created, :content_type => "application/json"
+  end
+
+  def head_ok_with_image_png_content_type
+    head :ok, :content_type => "image/png"
   end
 
   def head_with_location_header
@@ -484,6 +559,10 @@ class TestController < ActionController::Base
     head :x_custom_header => "something"
   end
 
+  def head_with_www_authenticate_header
+    head 'WWW-Authenticate' => 'something'
+  end
+
   def head_with_status_code_first
     head :forbidden, :x_custom_header => "something"
   end
@@ -496,27 +575,39 @@ class TestController < ActionController::Base
     render :action => "using_layout_around_block", :layout => "layouts/block_with_layout"
   end
 
-  def partial_dot_html
-    render :partial => 'partial.html.erb'
+  def partial_formats_html
+    render :partial => 'partial', :formats => [:html]
   end
 
   def partial
     render :partial => 'partial'
   end
 
-  def render_alternate_default
-    # For this test, the method "default_render" is overridden:
-    @alternate_default_render = lambda do
-      render :update do |page|
-        page.replace :foo, :partial => 'partial'
-      end
-    end
+  def partial_html_erb
+    render :partial => 'partial_html_erb'
   end
 
   def render_to_string_with_partial
     @partial_only = render_to_string :partial => "partial_only"
     @partial_with_locals = render_to_string :partial => "customer", :locals => { :customer => Customer.new("david") }
     render :template => "test/hello_world"
+  end
+
+  def render_to_string_with_template_and_html_partial
+    @text = render_to_string :template => "test/with_partial", :formats => [:text]
+    @html = render_to_string :template => "test/with_partial", :formats => [:html]
+    render :template => "test/with_html_partial"
+  end
+
+  def render_to_string_and_render_with_different_formats
+    @html = render_to_string :template => "test/with_partial", :formats => [:html]
+    render :template => "test/with_partial", :formats => [:text]
+  end
+
+  def render_template_within_a_template_with_other_format
+    render  :template => "test/with_xml_template",
+            :formats  => [:html],
+            :layout   => "with_html_partial"
   end
 
   def partial_with_counter
@@ -528,11 +619,11 @@ class TestController < ActionController::Base
   end
 
   def partial_with_form_builder
-    render :partial => ActionView::Helpers::FormBuilder.new(:post, nil, view_context, {}, Proc.new {})
+    render :partial => ActionView::Helpers::FormBuilder.new(:post, nil, view_context, {})
   end
 
   def partial_with_form_builder_subclass
-    render :partial => LabellingFormBuilder.new(:post, nil, view_context, {}, Proc.new {})
+    render :partial => LabellingFormBuilder.new(:post, nil, view_context, {})
   end
 
   def partial_collection
@@ -557,6 +648,10 @@ class TestController < ActionController::Base
 
   def partial_collection_with_spacer
     render :partial => "customer", :spacer_template => "partial_only", :collection => [ Customer.new("david"), Customer.new("mary") ]
+  end
+
+  def partial_collection_with_spacer_which_uses_render
+    render :partial => "customer", :spacer_template => "partial_with_partial", :collection => [ Customer.new("david"), Customer.new("mary") ]
   end
 
   def partial_collection_shorthand_with_locals
@@ -619,11 +714,7 @@ class TestController < ActionController::Base
     render :action => "calling_partial_with_layout", :layout => "layouts/partial_with_layout"
   end
 
-  def rescue_action(e)
-    raise
-  end
-
-  before_filter :only => :render_with_filters do
+  before_action only: :render_with_filters do
     request.format = :xml
   end
 
@@ -633,6 +724,10 @@ class TestController < ActionController::Base
   end
 
   private
+
+    def set_variable_for_layout
+      @variable_for_layout = nil
+    end
 
     def determine_layout
       case action_name
@@ -655,6 +750,14 @@ class TestController < ActionController::Base
     end
 end
 
+class MetalTestController < ActionController::Metal
+  include ActionController::Rendering
+
+  def accessing_logger_in_template
+    render :inline =>  "<%= logger.class %>"
+  end
+end
+
 class RenderTest < ActionController::TestCase
   tests TestController
 
@@ -662,7 +765,8 @@ class RenderTest < ActionController::TestCase
     # enable a logger so that (e.g.) the benchmarking stuff runs, so we can get
     # a more accurate simulation of what happens in "real life".
     super
-    @controller.logger = Logger.new(nil)
+    @controller.logger      = ActiveSupport::Logger.new(nil)
+    ActionView::Base.logger = ActiveSupport::Logger.new(nil)
 
     @request.host = "www.nextangle.com"
   end
@@ -689,15 +793,13 @@ class RenderTest < ActionController::TestCase
   end
 
   def test_line_offset
-    begin
-      get :render_line_offset
-      flunk "the action should have raised an exception"
-    rescue StandardError => exc
-      line = exc.backtrace.first
-      assert(line =~ %r{:(\d+):})
-      assert_equal "1", $1,
-        "The line offset is wrong, perhaps the wrong exception has been raised, exception was: #{exc.inspect}"
-    end
+    get :render_line_offset
+    flunk "the action should have raised an exception"
+  rescue StandardError => exc
+    line = exc.backtrace.first
+    assert(line =~ %r{:(\d+):})
+    assert_equal "1", $1,
+      "The line offset is wrong, perhaps the wrong exception has been raised, exception was: #{exc.inspect}"
   end
 
   # :ported: compatibility
@@ -732,6 +834,12 @@ class RenderTest < ActionController::TestCase
     assert_template "test/hello_world"
   end
 
+  def test_render_action_upcased
+    assert_raise ActionView::MissingTemplate do
+      get :render_action_upcased_hello_world
+    end
+  end
+
   # :ported:
   def test_render_action_hello_world_as_string
     get :render_action_hello_world_as_string
@@ -754,7 +862,7 @@ class RenderTest < ActionController::TestCase
   # :ported:
   def test_do_with_render_text_and_layout
     get :render_text_hello_world_with_layout
-    assert_equal "<html>hello world, I'm here!</html>", @response.body
+    assert_equal "<html>hello world, I am here!</html>", @response.body
   end
 
   # :ported:
@@ -851,12 +959,12 @@ class RenderTest < ActionController::TestCase
 
   # :ported:
   def test_attempt_to_access_object_method
-    assert_raise(ActionController::UnknownAction, "No action responded to [clone]") { get :clone }
+    assert_raise(AbstractController::ActionNotFound, "No action responded to [clone]") { get :clone }
   end
 
   # :ported:
   def test_private_methods
-    assert_raise(ActionController::UnknownAction, "No action responded to [determine_layout]") { get :determine_layout }
+    assert_raise(AbstractController::ActionNotFound, "No action responded to [determine_layout]") { get :determine_layout }
   end
 
   # :ported:
@@ -867,7 +975,7 @@ class RenderTest < ActionController::TestCase
 
   def test_access_to_logger_in_view
     get :accessing_logger_in_template
-    assert_equal "Logger", @response.body
+    assert_equal "ActiveSupport::Logger", @response.body
   end
 
   # :ported:
@@ -954,6 +1062,7 @@ class RenderTest < ActionController::TestCase
   def test_accessing_local_assigns_in_inline_template
     get :accessing_local_assigns_in_inline_template, :local_name => "Local David"
     assert_equal "Goodbye, Local David", @response.body
+    assert_equal "text/html", @response.content_type
   end
 
   def test_should_implicitly_render_html_template_from_xhr_request
@@ -1012,11 +1121,6 @@ class RenderTest < ActionController::TestCase
     assert_equal " ", @response.body
   end
 
-  def test_render_to_string
-    assert_not_deprecated { get :hello_in_a_string }
-    assert_equal "How's there? goodbyeHello: davidHello: marygoodbye\n", @response.body
-  end
-
   def test_render_to_string_doesnt_break_assigns
     get :render_to_string_with_assigns
     assert_equal "i'm before the render", assigns(:before)
@@ -1043,6 +1147,12 @@ class RenderTest < ActionController::TestCase
     assert_response :success
   end
 
+  def test_render_with_explicit_unescaped_template
+    assert_raise(ActionView::MissingTemplate) { get :render_with_explicit_unescaped_template }
+    get :render_with_explicit_escaped_template
+    assert_equal "Hello w*rld!", @response.body
+  end
+
   def test_render_with_explicit_string_template
     get :render_with_explicit_string_template
     assert_equal "<html>Hello world!</html>", @response.body
@@ -1055,15 +1165,15 @@ class RenderTest < ActionController::TestCase
 
   # :ported:
   def test_double_render
-    assert_raise(ActionController::DoubleRenderError) { get :double_render }
+    assert_raise(AbstractController::DoubleRenderError) { get :double_render }
   end
 
   def test_double_redirect
-    assert_raise(ActionController::DoubleRenderError) { get :double_redirect }
+    assert_raise(AbstractController::DoubleRenderError) { get :double_redirect }
   end
 
   def test_render_and_redirect
-    assert_raise(ActionController::DoubleRenderError) { get :render_and_redirect }
+    assert_raise(AbstractController::DoubleRenderError) { get :render_and_redirect }
   end
 
   # specify the one exception to double render rule - render_to_string followed by render
@@ -1079,7 +1189,7 @@ class RenderTest < ActionController::TestCase
 
   def test_action_talk_to_layout
     get :action_talk_to_layout
-    assert_equal "<title>Talking to the layout</title>\n\nAction was here!", @response.body
+    assert_equal "<title>Talking to the layout</title>\nAction was here!", @response.body
   end
 
   # :addressed:
@@ -1095,8 +1205,8 @@ class RenderTest < ActionController::TestCase
   end
 
   def test_yield_content_for
-    assert_not_deprecated { get :yield_content_for }
-    assert_equal "<title>Putting stuff in the title!</title>\n\nGreat stuff!\n", @response.body
+    get :yield_content_for
+    assert_equal "<title>Putting stuff in the title!</title>\nGreat stuff!\n", @response.body
   end
 
   def test_overwritting_rendering_relative_file_with_extension
@@ -1105,6 +1215,26 @@ class RenderTest < ActionController::TestCase
 
     get :hello_world_from_rxml_using_action
     assert_equal "<html>\n  <p>Hello</p>\n</html>\n", @response.body
+  end
+
+  def test_head_created
+    post :head_created
+    assert @response.body.blank?
+    assert_response :created
+  end
+
+  def test_head_created_with_application_json_content_type
+    post :head_created_with_application_json_content_type
+    assert @response.body.blank?
+    assert_equal "application/json", @response.header["Content-Type"]
+    assert_response :created
+  end
+
+  def test_head_ok_with_image_png_content_type
+    post :head_ok_with_image_png_content_type
+    assert @response.body.blank?
+    assert_equal "image/png", @response.header["Content-Type"]
+    assert_response :ok
   end
 
   def test_head_with_location_header
@@ -1116,9 +1246,9 @@ class RenderTest < ActionController::TestCase
 
   def test_head_with_location_object
     with_routing do |set|
-      set.draw do |map|
+      set.draw do
         resources :customers
-        match ':controller/:action'
+        get ':controller/:action'
       end
 
       get :head_with_location_object
@@ -1132,6 +1262,13 @@ class RenderTest < ActionController::TestCase
     get :head_with_custom_header
     assert @response.body.blank?
     assert_equal "something", @response.headers["X-Custom-Header"]
+    assert_response :ok
+  end
+
+  def test_head_with_www_authenticate_header
+    get :head_with_www_authenticate_header
+    assert @response.body.blank?
+    assert_equal "something", @response.headers["WWW-Authenticate"]
     assert_response :ok
   end
 
@@ -1191,22 +1328,57 @@ class RenderTest < ActionController::TestCase
   def test_partial_only
     get :partial_only
     assert_equal "only partial", @response.body
+    assert_equal "text/html", @response.content_type
   end
 
   def test_should_render_html_formatted_partial
     get :partial
-    assert_equal 'partial html', @response.body
+    assert_equal "partial html", @response.body
+    assert_equal "text/html", @response.content_type
   end
 
-  def test_should_render_html_partial_with_dot
-    get :partial_dot_html
-    assert_equal 'partial html', @response.body
+  def test_render_html_formatted_partial_even_with_other_mime_time_in_accept
+    @request.accept = "text/javascript, text/html"
+
+    get :partial_html_erb
+
+    assert_equal "partial.html.erb", @response.body.strip
+    assert_equal "text/html", @response.content_type
+  end
+
+  def test_should_render_html_partial_with_formats
+    get :partial_formats_html
+    assert_equal "partial html", @response.body
+    assert_equal "text/html", @response.content_type
   end
 
   def test_render_to_string_partial
     get :render_to_string_with_partial
     assert_equal "only partial", assigns(:partial_only)
     assert_equal "Hello: david", assigns(:partial_with_locals)
+    assert_equal "text/html", @response.content_type
+  end
+
+  def test_render_to_string_with_template_and_html_partial
+    get :render_to_string_with_template_and_html_partial
+    assert_equal "**only partial**\n", assigns(:text)
+    assert_equal "<strong>only partial</strong>\n", assigns(:html)
+    assert_equal "<strong>only html partial</strong>\n", @response.body
+    assert_equal "text/html", @response.content_type
+  end
+
+  def test_render_to_string_and_render_with_different_formats
+    get :render_to_string_and_render_with_different_formats
+    assert_equal "<strong>only partial</strong>\n", assigns(:html)
+    assert_equal "**only partial**\n", @response.body
+    assert_equal "text/plain", @response.content_type
+  end
+
+  def test_render_template_within_a_template_with_other_format
+    get :render_template_within_a_template_with_other_format
+    expected = "only html partial<p>This is grand!</p>"
+    assert_equal expected, @response.body.strip
+    assert_equal "text/html", @response.content_type
   end
 
   def test_partial_with_counter
@@ -1229,6 +1401,19 @@ class RenderTest < ActionController::TestCase
     get :partial_with_form_builder_subclass
     assert_match(/<label/, @response.body)
     assert_template('test/_labelling_form')
+  end
+
+  def test_nested_partial_with_form_builder
+    @controller = Fun::GamesController.new
+    get :nested_partial_with_form_builder
+    assert_match(/<label/, @response.body)
+    assert_template('fun/games/_form')
+  end
+
+  def test_namespaced_object_partial
+    @controller = Quiz::QuestionsController.new
+    get :new
+    assert_equal "Namespaced Partial", @response.body
   end
 
   def test_partial_collection
@@ -1256,9 +1441,27 @@ class RenderTest < ActionController::TestCase
     assert_equal "Bonjour: davidBonjour: mary", @response.body
   end
 
+  def test_locals_option_to_assert_template_is_not_supported
+    get :partial_collection_with_locals
+
+    warning_buffer = StringIO.new
+    $stderr = warning_buffer
+
+    assert_template partial: 'customer_greeting', locals: { greeting: 'Bonjour' }
+    assert_equal "the :locals option to #assert_template is only supported in a ActionView::TestCase\n", warning_buffer.string
+  ensure
+    $stderr = STDERR
+  end
+
   def test_partial_collection_with_spacer
     get :partial_collection_with_spacer
     assert_equal "Hello: davidonly partialHello: mary", @response.body
+    assert_template :partial => '_customer'
+  end
+
+  def test_partial_collection_with_spacer_which_uses_render
+    get :partial_collection_with_spacer_which_uses_render
+    assert_equal "Hello: davidpartial html\npartial with partial\nHello: mary", @response.body
     assert_template :partial => '_customer'
   end
 
@@ -1341,133 +1544,43 @@ class ExpiresInRenderTest < ActionController::TestCase
     assert_equal "max-age=60, public", @response.headers["Cache-Control"]
   end
 
+  def test_expires_in_header_with_must_revalidate
+    get :conditional_hello_with_expires_in_with_must_revalidate
+    assert_equal "max-age=60, private, must-revalidate", @response.headers["Cache-Control"]
+  end
+
+  def test_expires_in_header_with_public_and_must_revalidate
+    get :conditional_hello_with_expires_in_with_public_and_must_revalidate
+    assert_equal "max-age=60, public, must-revalidate", @response.headers["Cache-Control"]
+  end
+
   def test_expires_in_header_with_additional_headers
     get :conditional_hello_with_expires_in_with_public_with_more_keys
-    assert_equal "max-age=60, public, max-stale=18000", @response.headers["Cache-Control"]
+    assert_equal "max-age=60, public, s-maxage=18000", @response.headers["Cache-Control"]
   end
 
   def test_expires_in_old_syntax
     get :conditional_hello_with_expires_in_with_public_with_more_keys_old_syntax
-    assert_equal "max-age=60, public, max-stale=18000", @response.headers["Cache-Control"]
+    assert_equal "max-age=60, public, s-maxage=18000", @response.headers["Cache-Control"]
   end
 
   def test_expires_now
     get :conditional_hello_with_expires_now
     assert_equal "no-cache", @response.headers["Cache-Control"]
   end
-end
 
-
-class EtagRenderTest < ActionController::TestCase
-  tests TestController
-
-  def setup
-    super
-    @request.host = "www.nextangle.com"
-    @expected_bang_etag = etag_for(expand_key([:foo, 123]))
+  def test_expires_now_with_cache_control_headers
+    get :conditional_hello_with_cache_control_headers
+    assert_match(/no-cache/, @response.headers["Cache-Control"])
+    assert_match(/no-transform/, @response.headers["Cache-Control"])
   end
 
-  def test_render_blank_body_shouldnt_set_etag
-    get :blank_response
-    assert !@response.etag?
+  def test_date_header_when_expires_in
+    time = Time.mktime(2011,10,30)
+    Time.stubs(:now).returns(time)
+    get :conditional_hello_with_expires_in
+    assert_equal Time.now.httpdate, @response.headers["Date"]
   end
-
-  def test_render_200_should_set_etag
-    get :render_hello_world_from_variable
-    assert_equal etag_for("hello david"), @response.headers['ETag']
-    assert_equal "max-age=0, private, must-revalidate", @response.headers['Cache-Control']
-  end
-
-  def test_render_against_etag_request_should_304_when_match
-    @request.if_none_match = etag_for("hello david")
-    get :render_hello_world_from_variable
-    assert_equal 304, @response.status.to_i
-    assert @response.body.empty?
-  end
-
-  def test_render_against_etag_request_should_have_no_content_length_when_match
-    @request.if_none_match = etag_for("hello david")
-    get :render_hello_world_from_variable
-    assert !@response.headers.has_key?("Content-Length")
-  end
-
-  def test_render_against_etag_request_should_200_when_no_match
-    @request.if_none_match = etag_for("hello somewhere else")
-    get :render_hello_world_from_variable
-    assert_equal 200, @response.status.to_i
-    assert !@response.body.empty?
-  end
-
-  def test_render_should_not_set_etag_when_last_modified_has_been_specified
-    get :render_hello_world_with_last_modified_set
-    assert_equal 200, @response.status.to_i
-    assert_not_nil @response.last_modified
-    assert_nil @response.etag
-    assert @response.body.present?
-  end
-
-  def test_render_with_etag
-    get :render_hello_world_from_variable
-    expected_etag = etag_for('hello david')
-    assert_equal expected_etag, @response.headers['ETag']
-    @response = ActionController::TestResponse.new
-
-    @request.if_none_match = expected_etag
-    get :render_hello_world_from_variable
-    assert_equal 304, @response.status.to_i
-
-    @response = ActionController::TestResponse.new
-    @request.if_none_match = "\"diftag\""
-    get :render_hello_world_from_variable
-    assert_equal 200, @response.status.to_i
-  end
-
-  def render_with_404_shouldnt_have_etag
-    get :render_custom_code
-    assert_nil @response.headers['ETag']
-  end
-
-  def test_etag_should_not_be_changed_when_already_set
-    get :render_hello_world_with_etag_set
-    assert_equal etag_for("hello_world"), @response.headers['ETag']
-  end
-
-  def test_etag_should_govern_renders_with_layouts_too
-    get :builder_layout_test
-    assert_equal "<wrapper>\n<html>\n  <p>Hello </p>\n<p>This is grand!</p>\n</html>\n</wrapper>\n", @response.body
-    assert_equal etag_for("<wrapper>\n<html>\n  <p>Hello </p>\n<p>This is grand!</p>\n</html>\n</wrapper>\n"), @response.headers['ETag']
-  end
-
-  def test_etag_with_bang_should_set_etag
-    get :conditional_hello_with_bangs
-    assert_equal @expected_bang_etag, @response.headers["ETag"]
-    assert_response :success
-  end
-
-  def test_etag_with_bang_should_obey_if_none_match
-    @request.if_none_match = @expected_bang_etag
-    get :conditional_hello_with_bangs
-    assert_response :not_modified
-  end
-
-  def test_etag_with_public_true_should_set_header
-    get :conditional_hello_with_public_header
-    assert_equal "public", @response.headers['Cache-Control']
-  end
-
-  def test_etag_with_public_true_should_set_header_and_retain_other_headers
-    get :conditional_hello_with_public_header_and_expires_at
-    assert_equal "max-age=60, public", @response.headers['Cache-Control']
-  end
-
-  protected
-    def etag_for(text)
-      %("#{Digest::MD5.hexdigest(text)}")
-    end
-
-    def expand_key(args)
-      ActiveSupport::Cache.expand_cache_key(args)
-    end
 end
 
 class LastModifiedRenderTest < ActionController::TestCase
@@ -1488,7 +1601,7 @@ class LastModifiedRenderTest < ActionController::TestCase
     @request.if_modified_since = @last_modified
     get :conditional_hello
     assert_equal 304, @response.status.to_i
-    assert @response.body.blank?, @response.body
+    assert @response.body.blank?
     assert_equal @last_modified, @response.headers['Last-Modified']
   end
 
@@ -1503,9 +1616,39 @@ class LastModifiedRenderTest < ActionController::TestCase
     @request.if_modified_since = 'Thu, 16 Jul 2008 00:00:00 GMT'
     get :conditional_hello
     assert_equal 200, @response.status.to_i
-    assert !@response.body.blank?
+    assert @response.body.present?
     assert_equal @last_modified, @response.headers['Last-Modified']
   end
+
+
+  def test_responds_with_last_modified_with_record
+    get :conditional_hello_with_record
+    assert_equal @last_modified, @response.headers['Last-Modified']
+  end
+
+  def test_request_not_modified_with_record
+    @request.if_modified_since = @last_modified
+    get :conditional_hello_with_record
+    assert_equal 304, @response.status.to_i
+    assert @response.body.blank?
+    assert_equal @last_modified, @response.headers['Last-Modified']
+  end
+
+  def test_request_not_modified_but_etag_differs_with_record
+    @request.if_modified_since = @last_modified
+    @request.if_none_match = "234"
+    get :conditional_hello_with_record
+    assert_response :success
+  end
+
+  def test_request_modified_with_record
+    @request.if_modified_since = 'Thu, 16 Jul 2008 00:00:00 GMT'
+    get :conditional_hello_with_record
+    assert_equal 200, @response.status.to_i
+    assert @response.body.present?
+    assert_equal @last_modified, @response.headers['Last-Modified']
+  end
+
 
   def test_request_with_bang_gets_last_modified
     get :conditional_hello_with_bangs
@@ -1523,5 +1666,34 @@ class LastModifiedRenderTest < ActionController::TestCase
     @request.if_modified_since = 5.years.ago.httpdate
     get :conditional_hello_with_bangs
     assert_response :success
+  end
+end
+
+class EtagRenderTest < ActionController::TestCase
+  tests TestControllerWithExtraEtags
+
+  def setup
+    super
+    @request.host = "www.nextangle.com"
+  end
+
+  def test_multiple_etags
+    @request.if_none_match = %("#{Digest::MD5.hexdigest(ActiveSupport::Cache.expand_cache_key([ "123", 'ab', :cde, [:f] ]))}")
+    get :fresh
+    assert_response :not_modified
+
+    @request.if_none_match = %("nomatch")
+    get :fresh
+    assert_response :success
+  end
+end
+
+
+class MetalRenderTest < ActionController::TestCase
+  tests MetalTestController
+
+  def test_access_to_logger_in_view
+    get :accessing_logger_in_template
+    assert_equal "NilClass", @response.body
   end
 end

@@ -1,11 +1,47 @@
 require 'abstract_unit'
 
 class FormTagHelperTest < ActionView::TestCase
+  include RenderERBUtils
+
   tests ActionView::Helpers::FormTagHelper
 
   def setup
     super
     @controller = BasicController.new
+  end
+
+  def hidden_fields(options = {})
+    method = options[:method]
+
+    txt =  %{<div style="margin:0;padding:0;display:inline">}
+    txt << %{<input name="utf8" type="hidden" value="&#x2713;" />}
+    if method && !%w(get post).include?(method.to_s)
+      txt << %{<input name="_method" type="hidden" value="#{method}" />}
+    end
+    txt << %{</div>}
+  end
+
+  def form_text(action = "http://www.example.com", options = {})
+    remote, enctype, html_class, id, method = options.values_at(:remote, :enctype, :html_class, :id, :method)
+
+    method = method.to_s == "get" ? "get" : "post"
+
+    txt =  %{<form accept-charset="UTF-8" action="#{action}"}
+    txt << %{ enctype="multipart/form-data"} if enctype
+    txt << %{ data-remote="true"} if remote
+    txt << %{ class="#{html_class}"} if html_class
+    txt << %{ id="#{id}"} if id
+    txt << %{ method="#{method}">}
+  end
+
+  def whole_form(action = "http://www.example.com", options = {})
+    out = form_text(action, options) + hidden_fields(options)
+
+    if block_given?
+      out << yield << "</form>"
+    end
+
+    out
   end
 
   def url_for(options)
@@ -31,51 +67,63 @@ class FormTagHelperTest < ActionView::TestCase
 
   def test_form_tag
     actual = form_tag
-    expected = %(<form action="http://www.example.com" method="post">)
+    expected = whole_form
     assert_dom_equal expected, actual
   end
 
   def test_form_tag_multipart
     actual = form_tag({}, { 'multipart' => true })
-    expected = %(<form action="http://www.example.com" enctype="multipart/form-data" method="post">)
+    expected = whole_form("http://www.example.com", :enctype => true)
+    assert_dom_equal expected, actual
+  end
+
+  def test_form_tag_with_method_patch
+    actual = form_tag({}, { :method => :patch })
+    expected = whole_form("http://www.example.com", :method => :patch)
     assert_dom_equal expected, actual
   end
 
   def test_form_tag_with_method_put
     actual = form_tag({}, { :method => :put })
-    expected = %(<form action="http://www.example.com" method="post"><div style='margin:0;padding:0;display:inline'><input type="hidden" name="_method" value="put" /></div>)
+    expected = whole_form("http://www.example.com", :method => :put)
     assert_dom_equal expected, actual
   end
 
   def test_form_tag_with_method_delete
     actual = form_tag({}, { :method => :delete })
-    expected = %(<form action="http://www.example.com" method="post"><div style='margin:0;padding:0;display:inline'><input type="hidden" name="_method" value="delete" /></div>)
+
+    expected = whole_form("http://www.example.com", :method => :delete)
     assert_dom_equal expected, actual
   end
 
   def test_form_tag_with_remote
     actual = form_tag({}, :remote => true)
-    expected = %(<form action="http://www.example.com" method="post" data-remote="true">)
+
+    expected = whole_form("http://www.example.com", :remote => true)
     assert_dom_equal expected, actual
   end
 
   def test_form_tag_with_remote_false
     actual = form_tag({}, :remote => false)
-    expected = %(<form action="http://www.example.com" method="post">)
+
+    expected = whole_form
     assert_dom_equal expected, actual
   end
 
   def test_form_tag_with_block_in_erb
-    output_buffer = form_tag("http://example.com") { concat "Hello world!" }
+    output_buffer = render_erb("<%= form_tag('http://www.example.com') do %>Hello world!<% end %>")
 
-    expected = %(<form action="http://example.com" method="post">Hello world!</form>)
+    expected = whole_form { "Hello world!" }
     assert_dom_equal expected, output_buffer
   end
 
   def test_form_tag_with_block_and_method_in_erb
-    output_buffer = form_tag("http://example.com", :method => :put) { concat "Hello world!" }
+    output_buffer = render_erb("<%= form_tag('http://www.example.com', :method => :put) do %>Hello world!<% end %>")
 
-    expected = %(<form action="http://example.com" method="post"><div style='margin:0;padding:0;display:inline'><input type="hidden" name="_method" value="put" /></div>Hello world!</form>)
+    expected = whole_form("http://www.example.com", :method => "put") do
+      "Hello world!"
+    end
+
     assert_dom_equal expected, output_buffer
   end
 
@@ -159,33 +207,51 @@ class FormTagHelperTest < ActionView::TestCase
     assert_dom_equal expected, actual
   end
 
-  def test_select_tag_with_include_blank_with_string
-    actual = select_tag "places", "<option>Home</option><option>Work</option><option>Pub</option>".html_safe, :include_blank => "string"
+  def test_select_tag_with_prompt
+    actual = select_tag "places", "<option>Home</option><option>Work</option><option>Pub</option>".html_safe, :prompt => "string"
     expected = %(<select id="places" name="places"><option value="">string</option><option>Home</option><option>Work</option><option>Pub</option></select>)
     assert_dom_equal expected, actual
   end
 
-  def test_select_tag_with_array_options
-    assert_deprecated /array/ do
-      select_tag "people", ["<option>david</option>"]
-    end
+  def test_select_tag_escapes_prompt
+    actual = select_tag "places", "<option>Home</option><option>Work</option><option>Pub</option>".html_safe, :prompt => "<script>alert(1337)</script>"
+    expected = %(<select id="places" name="places"><option value="">&lt;script&gt;alert(1337)&lt;/script&gt;</option><option>Home</option><option>Work</option><option>Pub</option></select>)
+    assert_dom_equal expected, actual
+  end
+
+  def test_select_tag_with_prompt_and_include_blank
+    actual = select_tag "places", "<option>Home</option><option>Work</option><option>Pub</option>".html_safe, :prompt => "string", :include_blank => true
+    expected = %(<select name="places" id="places"><option value="">string</option><option value=""></option><option>Home</option><option>Work</option><option>Pub</option></select>)
+    assert_dom_equal expected, actual
+  end
+
+  def test_select_tag_with_nil_option_tags_and_include_blank
+    actual = select_tag "places", nil, :include_blank => true
+    expected = %(<select id="places" name="places"><option value=""></option></select>)
+    assert_dom_equal expected, actual
+  end
+
+  def test_select_tag_with_nil_option_tags_and_prompt
+    actual = select_tag "places", nil, :prompt => "string"
+    expected = %(<select id="places" name="places"><option value="">string</option></select>)
+    assert_dom_equal expected, actual
   end
 
   def test_text_area_tag_size_string
     actual = text_area_tag "body", "hello world", "size" => "20x40"
-    expected = %(<textarea cols="20" id="body" name="body" rows="40">hello world</textarea>)
+    expected = %(<textarea cols="20" id="body" name="body" rows="40">\nhello world</textarea>)
     assert_dom_equal expected, actual
   end
 
   def test_text_area_tag_size_symbol
     actual = text_area_tag "body", "hello world", :size => "20x40"
-    expected = %(<textarea cols="20" id="body" name="body" rows="40">hello world</textarea>)
+    expected = %(<textarea cols="20" id="body" name="body" rows="40">\nhello world</textarea>)
     assert_dom_equal expected, actual
   end
 
   def test_text_area_tag_should_disregard_size_if_its_given_as_an_integer
     actual = text_area_tag "body", "hello world", :size => 20
-    expected = %(<textarea id="body" name="body">hello world</textarea>)
+    expected = %(<textarea id="body" name="body">\nhello world</textarea>)
     assert_dom_equal expected, actual
   end
 
@@ -196,13 +262,19 @@ class FormTagHelperTest < ActionView::TestCase
 
   def test_text_area_tag_escape_content
     actual = text_area_tag "body", "<b>hello world</b>", :size => "20x40"
-    expected = %(<textarea cols="20" id="body" name="body" rows="40">&lt;b&gt;hello world&lt;/b&gt;</textarea>)
+    expected = %(<textarea cols="20" id="body" name="body" rows="40">\n&lt;b&gt;hello world&lt;/b&gt;</textarea>)
     assert_dom_equal expected, actual
   end
 
   def test_text_area_tag_unescaped_content
     actual = text_area_tag "body", "<b>hello world</b>", :size => "20x40", :escape => false
-    expected = %(<textarea cols="20" id="body" name="body" rows="40"><b>hello world</b></textarea>)
+    expected = %(<textarea cols="20" id="body" name="body" rows="40">\n<b>hello world</b></textarea>)
+    assert_dom_equal expected, actual
+  end
+
+  def test_text_area_tag_unescaped_nil_content
+    actual = text_area_tag "body", nil, :escape => false
+    expected = %(<textarea id="body" name="body">\n</textarea>)
     assert_dom_equal expected, actual
   end
 
@@ -319,37 +391,121 @@ class FormTagHelperTest < ActionView::TestCase
 
   def test_submit_tag
     assert_dom_equal(
-      %(<input name='commit' data-disable-with="Saving..." onclick="alert('hello!')" type="submit" value="Save" />),
-      submit_tag("Save", :disable_with => "Saving...", :onclick => "alert('hello!')")
+      %(<input name='commit' data-disable-with="Saving..." onclick="alert(&#39;hello!&#39;)" type="submit" value="Save" />),
+      submit_tag("Save", :onclick => "alert('hello!')", :data => { :disable_with => "Saving..." })
     )
   end
 
   def test_submit_tag_with_no_onclick_options
     assert_dom_equal(
       %(<input name='commit' data-disable-with="Saving..." type="submit" value="Save" />),
-      submit_tag("Save", :disable_with => "Saving...")
+      submit_tag("Save", :data => { :disable_with => "Saving..." })
     )
   end
 
   def test_submit_tag_with_confirmation
     assert_dom_equal(
       %(<input name='commit' type='submit' value='Save' data-confirm="Are you sure?" />),
-      submit_tag("Save", :confirm => "Are you sure?")
+      submit_tag("Save", :data => { :confirm => "Are you sure?" })
     )
   end
 
-  def test_submit_tag_with_confirmation_and_with_disable_with
+  def test_submit_tag_with_deprecated_confirmation
+    assert_deprecated ":confirm option is deprecated and will be removed from Rails 4.1. Use 'data: { confirm: \'Text\' }' instead" do
+      assert_dom_equal(
+        %(<input name='commit' type='submit' value='Save' data-confirm="Are you sure?" />),
+        submit_tag("Save", :confirm => "Are you sure?")
+      )
+    end
+  end
+
+  def test_button_tag
     assert_dom_equal(
-      %(<input name="commit" data-disable-with="Saving..." data-confirm="Are you sure?" type="submit" value="Save" />),
-      submit_tag("Save", :disable_with => "Saving...", :confirm => "Are you sure?")
+      %(<button name="button" type="submit">Button</button>),
+      button_tag
     )
+  end
+
+  def test_button_tag_with_submit_type
+    assert_dom_equal(
+      %(<button name="button" type="submit">Save</button>),
+      button_tag("Save", :type => "submit")
+    )
+  end
+
+  def test_button_tag_with_button_type
+    assert_dom_equal(
+      %(<button name="button" type="button">Button</button>),
+      button_tag("Button", :type => "button")
+    )
+  end
+
+  def test_button_tag_with_reset_type
+    assert_dom_equal(
+      %(<button name="button" type="reset">Reset</button>),
+      button_tag("Reset", :type => "reset")
+    )
+  end
+
+  def test_button_tag_with_disabled_option
+    assert_dom_equal(
+      %(<button name="button" type="reset" disabled="disabled">Reset</button>),
+      button_tag("Reset", :type => "reset", :disabled => true)
+    )
+  end
+
+  def test_button_tag_escape_content
+    assert_dom_equal(
+      %(<button name="button" type="reset" disabled="disabled">&lt;b&gt;Reset&lt;/b&gt;</button>),
+      button_tag("<b>Reset</b>", :type => "reset", :disabled => true)
+    )
+  end
+
+  def test_button_tag_with_block
+    assert_dom_equal('<button name="button" type="submit">Content</button>', button_tag { 'Content' })
+  end
+
+  def test_button_tag_with_block_and_options
+    output = button_tag(:name => 'temptation', :type => 'button') { content_tag(:strong, 'Do not press me') }
+    assert_dom_equal('<button name="temptation" type="button"><strong>Do not press me</strong></button>', output)
+  end
+
+  def test_button_tag_with_confirmation
+    assert_dom_equal(
+      %(<button name="button" type="submit" data-confirm="Are you sure?">Save</button>),
+      button_tag("Save", :type => "submit", :data => { :confirm => "Are you sure?" })
+    )
+  end
+
+  def test_button_tag_with_deprecated_confirmation
+    assert_deprecated ":confirm option is deprecated and will be removed from Rails 4.1. Use 'data: { confirm: \'Text\' }' instead" do
+      assert_dom_equal(
+        %(<button name="button" type="submit" data-confirm="Are you sure?">Save</button>),
+        button_tag("Save", :type => "submit", :confirm => "Are you sure?")
+      )
+    end
   end
 
   def test_image_submit_tag_with_confirmation
     assert_dom_equal(
-      %(<input type="image" src="/images/save.gif" data-confirm="Are you sure?" />),
-      image_submit_tag("save.gif", :confirm => "Are you sure?")
+      %(<input alt="Save" type="image" src="/images/save.gif" data-confirm="Are you sure?" />),
+      image_submit_tag("save.gif", :data => { :confirm => "Are you sure?" })
     )
+  end
+
+  def test_image_submit_tag_with_deprecated_confirmation
+    assert_deprecated ":confirm option is deprecated and will be removed from Rails 4.1. Use 'data: { confirm: \'Text\' }' instead" do
+      assert_dom_equal(
+        %(<input alt="Save" type="image" src="/images/save.gif" data-confirm="Are you sure?" />),
+        image_submit_tag("save.gif", :confirm => "Are you sure?")
+      )
+    end
+  end
+
+
+  def test_color_field_tag
+    expected = %{<input id="car" name="car" type="color" />}
+    assert_dom_equal(expected, color_field_tag("car"))
   end
 
   def test_search_field_tag
@@ -357,9 +513,39 @@ class FormTagHelperTest < ActionView::TestCase
     assert_dom_equal(expected, search_field_tag("query"))
   end
 
-  def telephone_field_tag
+  def test_telephone_field_tag
     expected = %{<input id="cell" name="cell" type="tel" />}
     assert_dom_equal(expected, telephone_field_tag("cell"))
+  end
+
+  def test_date_field_tag
+    expected = %{<input id="cell" name="cell" type="date" />}
+    assert_dom_equal(expected, date_field_tag("cell"))
+  end
+
+  def test_time_field_tag
+    expected = %{<input id="cell" name="cell" type="time" />}
+    assert_dom_equal(expected, time_field_tag("cell"))
+  end
+
+  def test_datetime_field_tag
+    expected = %{<input id="appointment" name="appointment" type="datetime" />}
+    assert_dom_equal(expected, datetime_field_tag("appointment"))
+  end
+
+  def test_datetime_local_field_tag
+    expected = %{<input id="appointment" name="appointment" type="datetime-local" />}
+    assert_dom_equal(expected, datetime_local_field_tag("appointment"))
+  end
+
+  def test_month_field_tag
+    expected = %{<input id="birthday" name="birthday" type="month" />}
+    assert_dom_equal(expected, month_field_tag("birthday"))
+  end
+
+  def test_week_field_tag
+    expected = %{<input id="birthday" name="birthday" type="week" />}
+    assert_dom_equal(expected, week_field_tag("birthday"))
   end
 
   def test_url_field_tag
@@ -382,30 +568,66 @@ class FormTagHelperTest < ActionView::TestCase
     assert_dom_equal(expected, range_field_tag("volume", nil, :in => 0..11, :step => 0.1))
   end
 
-  def test_pass
-    assert_equal 1, 1
-  end
-
   def test_field_set_tag_in_erb
-    output_buffer = field_set_tag("Your details") { concat "Hello world!" }
+    output_buffer = render_erb("<%= field_set_tag('Your details') do %>Hello world!<% end %>")
 
     expected = %(<fieldset><legend>Your details</legend>Hello world!</fieldset>)
     assert_dom_equal expected, output_buffer
 
-    output_buffer = field_set_tag { concat "Hello world!" }
+    output_buffer = render_erb("<%= field_set_tag do %>Hello world!<% end %>")
 
     expected = %(<fieldset>Hello world!</fieldset>)
     assert_dom_equal expected, output_buffer
 
-    output_buffer = field_set_tag('') { concat "Hello world!" }
+    output_buffer = render_erb("<%= field_set_tag('') do %>Hello world!<% end %>")
 
     expected = %(<fieldset>Hello world!</fieldset>)
     assert_dom_equal expected, output_buffer
 
-    output_buffer = field_set_tag('', :class => 'format') { concat "Hello world!" }
+    output_buffer = render_erb("<%= field_set_tag('', :class => 'format') do %>Hello world!<% end %>")
 
     expected = %(<fieldset class="format">Hello world!</fieldset>)
     assert_dom_equal expected, output_buffer
+
+    output_buffer = render_erb("<%= field_set_tag %>")
+
+    expected = %(<fieldset></fieldset>)
+    assert_dom_equal expected, output_buffer
+
+    output_buffer = render_erb("<%= field_set_tag('You legend!') %>")
+
+    expected = %(<fieldset><legend>You legend!</legend></fieldset>)
+    assert_dom_equal expected, output_buffer
+  end
+
+  def test_text_area_tag_options_symbolize_keys_side_effects
+    options = { :option => "random_option" }
+    text_area_tag "body", "hello world", options
+    assert_equal options, { :option => "random_option" }
+  end
+
+  def test_submit_tag_options_symbolize_keys_side_effects
+    options = { :option => "random_option" }
+    submit_tag "submit value", options
+    assert_equal options, { :option => "random_option" }
+  end
+
+  def test_button_tag_options_symbolize_keys_side_effects
+    options = { :option => "random_option" }
+    button_tag "button value", options
+    assert_equal options, { :option => "random_option" }
+  end
+
+  def test_image_submit_tag_options_symbolize_keys_side_effects
+    options = { :option => "random_option" }
+    image_submit_tag "submit source", options
+    assert_equal options, { :option => "random_option" }
+  end
+
+  def test_image_label_tag_options_symbolize_keys_side_effects
+    options = { :option => "random_option" }
+    label_tag "submit source", "title", options
+    assert_equal options, { :option => "random_option" }
   end
 
   def protect_against_forgery?

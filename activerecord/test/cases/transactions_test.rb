@@ -3,13 +3,30 @@ require 'models/topic'
 require 'models/reply'
 require 'models/developer'
 require 'models/book'
+require 'models/author'
+require 'models/post'
 
 class TransactionTest < ActiveRecord::TestCase
   self.use_transactional_fixtures = false
-  fixtures :topics, :developers
+  fixtures :topics, :developers, :authors, :posts
 
   def setup
     @first, @second = Topic.find(1, 2).sort_by { |t| t.id }
+  end
+
+  def test_raise_after_destroy
+    assert_not @first.frozen?
+
+    assert_raises(RuntimeError) {
+      Topic.transaction do
+        @first.destroy
+        assert @first.frozen?
+        raise
+      end
+    }
+
+    assert @first.reload
+    assert_not @first.frozen?
   end
 
   def test_successful
@@ -35,22 +52,23 @@ class TransactionTest < ActiveRecord::TestCase
   end
 
   def test_successful_with_return
-    class << Topic.connection
+    committed = false
+
+    Topic.connection.class_eval do
       alias :real_commit_db_transaction :commit_db_transaction
-      def commit_db_transaction
-        $committed = true
+      define_method(:commit_db_transaction) do
+        committed = true
         real_commit_db_transaction
       end
     end
 
-    $committed = false
     transaction_with_return
-    assert $committed
+    assert committed
 
     assert Topic.find(1).approved?, "First should have been approved"
     assert !Topic.find(2).approved?, "Second should have been unapproved"
   ensure
-    class << Topic.connection
+    Topic.connection.class_eval do
       remove_method :commit_db_transaction
       alias :commit_db_transaction :real_commit_db_transaction rescue nil
     end
@@ -89,98 +107,113 @@ class TransactionTest < ActiveRecord::TestCase
   end
 
   def test_raising_exception_in_callback_rollbacks_in_save
-    add_exception_raising_after_save_callback_to_topic
-
-    begin
-      @first.approved = true
-      @first.save
-      flunk
-    rescue => e
-      assert_equal "Make the transaction rollback", e.message
-      assert !Topic.find(1).approved?
-    ensure
-      remove_exception_raising_after_save_callback_to_topic
+    def @first.after_save_for_transaction
+      raise 'Make the transaction rollback'
     end
+
+    @first.approved = true
+    e = assert_raises(RuntimeError) { @first.save }
+    assert_equal "Make the transaction rollback", e.message
+    assert !Topic.find(1).approved?
+  end
+
+  def test_update_should_rollback_on_failure
+    author = Author.find(1)
+    posts_count = author.posts.size
+    assert posts_count > 0
+    status = author.update(name: nil, post_ids: [])
+    assert !status
+    assert_equal posts_count, author.posts(true).size
+  end
+
+  def test_update_should_rollback_on_failure!
+    author = Author.find(1)
+    posts_count = author.posts.size
+    assert posts_count > 0
+    assert_raise(ActiveRecord::RecordInvalid) do
+      author.update!(name: nil, post_ids: [])
+    end
+    assert_equal posts_count, author.posts(true).size
   end
 
   def test_cancellation_from_before_destroy_rollbacks_in_destroy
-    add_cancelling_before_destroy_with_db_side_effect_to_topic
-    begin
-      nbooks_before_destroy = Book.count
-      status = @first.destroy
+    add_cancelling_before_destroy_with_db_side_effect_to_topic @first
+    nbooks_before_destroy = Book.count
+    status = @first.destroy
+    assert !status
+    @first.reload
+    assert_equal nbooks_before_destroy, Book.count
+  end
+
+  %w(validation save).each do |filter|
+    define_method("test_cancellation_from_before_filters_rollbacks_in_#{filter}") do
+      send("add_cancelling_before_#{filter}_with_db_side_effect_to_topic", @first)
+      nbooks_before_save = Book.count
+      original_author_name = @first.author_name
+      @first.author_name += '_this_should_not_end_up_in_the_db'
+      status = @first.save
       assert !status
-      assert_nothing_raised(ActiveRecord::RecordNotFound) { @first.reload }
-      assert_equal nbooks_before_destroy, Book.count
-    ensure
-      remove_cancelling_before_destroy_with_db_side_effect_to_topic
+      assert_equal original_author_name, @first.reload.author_name
+      assert_equal nbooks_before_save, Book.count
     end
-  end
 
-  def test_cancellation_from_before_filters_rollbacks_in_save
-    %w(validation save).each do |filter|
-      send("add_cancelling_before_#{filter}_with_db_side_effect_to_topic")
-      begin
-        nbooks_before_save = Book.count
-        original_author_name = @first.author_name
-        @first.author_name += '_this_should_not_end_up_in_the_db'
-        status = @first.save
-        assert !status
-        assert_equal original_author_name, @first.reload.author_name
-        assert_equal nbooks_before_save, Book.count
-      ensure
-        send("remove_cancelling_before_#{filter}_with_db_side_effect_to_topic")
-      end
-    end
-  end
+    define_method("test_cancellation_from_before_filters_rollbacks_in_#{filter}!") do
+      send("add_cancelling_before_#{filter}_with_db_side_effect_to_topic", @first)
+      nbooks_before_save = Book.count
+      original_author_name = @first.author_name
+      @first.author_name += '_this_should_not_end_up_in_the_db'
 
-  def test_cancellation_from_before_filters_rollbacks_in_save!
-    %w(validation save).each do |filter|
-      send("add_cancelling_before_#{filter}_with_db_side_effect_to_topic")
       begin
-        nbooks_before_save = Book.count
-        original_author_name = @first.author_name
-        @first.author_name += '_this_should_not_end_up_in_the_db'
         @first.save!
-        flunk
-      rescue => e
-        assert_equal original_author_name, @first.reload.author_name
-        assert_equal nbooks_before_save, Book.count
-      ensure
-        send("remove_cancelling_before_#{filter}_with_db_side_effect_to_topic")
+      rescue ActiveRecord::RecordInvalid, ActiveRecord::RecordNotSaved
       end
+
+      assert_equal original_author_name, @first.reload.author_name
+      assert_equal nbooks_before_save, Book.count
     end
   end
 
   def test_callback_rollback_in_create
-    new_topic = Topic.new(
-      :title => "A new topic",
-      :author_name => "Ben",
-      :author_email_address => "ben@example.com",
-      :written_on => "2003-07-16t15:28:11.2233+01:00",
-      :last_read => "2004-04-15",
-      :bonus_time => "2005-01-30t15:28:00.00+01:00",
-      :content => "Have a nice day",
-      :approved => false)
-    new_record_snapshot = new_topic.new_record?
+    topic = Class.new(Topic) {
+      def after_create_for_transaction
+        raise 'Make the transaction rollback'
+      end
+    }
+
+    new_topic = topic.new(:title                => "A new topic",
+                          :author_name          => "Ben",
+                          :author_email_address => "ben@example.com",
+                          :written_on           => "2003-07-16t15:28:11.2233+01:00",
+                          :last_read            => "2004-04-15",
+                          :bonus_time           => "2005-01-30t15:28:00.00+01:00",
+                          :content              => "Have a nice day",
+                          :approved             => false)
+
+    new_record_snapshot = !new_topic.persisted?
     id_present = new_topic.has_attribute?(Topic.primary_key)
     id_snapshot = new_topic.id
 
     # Make sure the second save gets the after_create callback called.
     2.times do
-      begin
-        add_exception_raising_after_create_callback_to_topic
-        new_topic.approved = true
-        new_topic.save
-        flunk
-      rescue => e
-        assert_equal "Make the transaction rollback", e.message
-        assert_equal new_record_snapshot, new_topic.new_record?, "The topic should have its old new_record value"
-        assert_equal id_snapshot, new_topic.id, "The topic should have its old id"
-        assert_equal id_present, new_topic.has_attribute?(Topic.primary_key)
-      ensure
-        remove_exception_raising_after_create_callback_to_topic
-      end
+      new_topic.approved = true
+      e = assert_raises(RuntimeError) { new_topic.save }
+      assert_equal "Make the transaction rollback", e.message
+      assert_equal new_record_snapshot, !new_topic.persisted?, "The topic should have its old persisted value"
+      assert_equal id_snapshot, new_topic.id, "The topic should have its old id"
+      assert_equal id_present, new_topic.has_attribute?(Topic.primary_key)
     end
+  end
+
+  def test_callback_rollback_in_create_with_record_invalid_exception
+    topic = Class.new(Topic) {
+      def after_create_for_transaction
+        raise ActiveRecord::RecordInvalid.new(Author.new)
+      end
+    }
+
+    new_topic = topic.create(:title => "A new topic")
+    assert !new_topic.persisted?, "The topic should not be persisted"
+    assert_nil new_topic.id, "The topic should not have an ID"
   end
 
   def test_nested_explicit_transactions
@@ -230,6 +263,27 @@ class TransactionTest < ActiveRecord::TestCase
 
       begin
         Topic.transaction :requires_new => true do
+          @first.happy = false
+          @first.save!
+          raise
+        end
+      rescue
+      end
+    end
+
+    assert @first.reload.approved?
+    assert !@second.reload.approved?
+  end if Topic.connection.supports_savepoints?
+
+  def test_force_savepoint_on_instance
+    @first.transaction do
+      @first.approved  = true
+      @second.approved = false
+      @first.save!
+      @second.save!
+
+      begin
+        @second.transaction :requires_new => true do
           @first.happy = false
           @first.save!
           raise
@@ -310,7 +364,6 @@ class TransactionTest < ActiveRecord::TestCase
   def test_rollback_when_commit_raises
     Topic.connection.expects(:begin_db_transaction)
     Topic.connection.expects(:commit_db_transaction).raises('OH NOES')
-    Topic.connection.expects(:outside_transaction?).returns(false)
     Topic.connection.expects(:rollback_db_transaction)
 
     assert_raise RuntimeError do
@@ -318,6 +371,16 @@ class TransactionTest < ActiveRecord::TestCase
         # do nothing
       end
     end
+  end
+
+  def test_rollback_when_saving_a_frozen_record
+    topic = Topic.new(:title => 'test')
+    topic.freeze
+    e = assert_raise(RuntimeError) { topic.save }
+    assert_equal "can't modify frozen Hash", e.message
+    assert !topic.persisted?, 'not persisted'
+    assert_nil topic.id
+    assert topic.frozen?, 'not frozen'
   end
 
   def test_restore_active_record_state_for_all_records_in_a_transaction
@@ -328,57 +391,37 @@ class TransactionTest < ActiveRecord::TestCase
       assert topic_2.save
       @first.save
       @second.destroy
-      assert_equal false, topic_1.new_record?
+      assert topic_1.persisted?, 'persisted'
       assert_not_nil topic_1.id
-      assert_equal false, topic_2.new_record?
+      assert topic_2.persisted?, 'persisted'
       assert_not_nil topic_2.id
-      assert_equal false, @first.new_record?
+      assert @first.persisted?, 'persisted'
       assert_not_nil @first.id
-      assert_equal true, @second.destroyed?
+      assert @second.destroyed?, 'destroyed'
       raise ActiveRecord::Rollback
     end
 
-    assert_equal true, topic_1.new_record?
+    assert !topic_1.persisted?, 'not persisted'
     assert_nil topic_1.id
-    assert_equal true, topic_2.new_record?
+    assert !topic_2.persisted?, 'not persisted'
     assert_nil topic_2.id
-    assert_equal false, @first.new_record?
+    assert @first.persisted?, 'persisted'
     assert_not_nil @first.id
-    assert_equal false, @second.destroyed?
+    assert !@second.destroyed?, 'not destroyed'
   end
 
   if current_adapter?(:PostgreSQLAdapter) && defined?(PGconn::PQTRANS_IDLE)
     def test_outside_transaction_works
-      assert Topic.connection.outside_transaction?
+      assert assert_deprecated { Topic.connection.outside_transaction? }
       Topic.connection.begin_db_transaction
-      assert !Topic.connection.outside_transaction?
+      assert assert_deprecated { !Topic.connection.outside_transaction? }
       Topic.connection.rollback_db_transaction
-      assert Topic.connection.outside_transaction?
-    end
-
-    def test_rollback_wont_be_executed_if_no_transaction_active
-      assert_raise RuntimeError do
-        Topic.transaction do
-          Topic.connection.rollback_db_transaction
-          Topic.connection.expects(:rollback_db_transaction).never
-          raise "Rails doesn't scale!"
-        end
-      end
-    end
-
-    def test_open_transactions_count_is_reset_to_zero_if_no_transaction_active
-      Topic.transaction do
-        Topic.transaction do
-          Topic.connection.rollback_db_transaction
-        end
-        assert_equal 0, Topic.connection.open_transactions
-      end
-      assert_equal 0, Topic.connection.open_transactions
+      assert assert_deprecated { Topic.connection.outside_transaction? }
     end
   end
 
   def test_sqlite_add_column_in_transaction
-    return true unless current_adapter?(:SQLite3Adapter, :SQLiteAdapter)
+    return true unless current_adapter?(:SQLite3Adapter)
 
     # Test first if column creation/deletion works correctly when no
     # transaction is in place.
@@ -408,63 +451,45 @@ class TransactionTest < ActiveRecord::TestCase
     end
   end
 
+  def test_transactions_state_from_rollback
+    connection = Topic.connection
+    transaction = ActiveRecord::ConnectionAdapters::ClosedTransaction.new(connection).begin
+
+    assert transaction.open?
+    assert !transaction.state.rolledback?
+    assert !transaction.state.committed?
+
+    transaction.perform_rollback
+
+    assert transaction.state.rolledback?
+    assert !transaction.state.committed?
+  end
+
+  def test_transactions_state_from_commit
+    connection = Topic.connection
+    transaction = ActiveRecord::ConnectionAdapters::ClosedTransaction.new(connection).begin
+
+    assert transaction.open?
+    assert !transaction.state.rolledback?
+    assert !transaction.state.committed?
+
+    transaction.perform_commit
+
+    assert !transaction.state.rolledback?
+    assert transaction.state.committed?
+  end
+
   private
-    def define_callback_method(callback_method)
-      define_method(callback_method) do
-        self.history << [callback_method, :method]
+
+  %w(validation save destroy).each do |filter|
+    define_method("add_cancelling_before_#{filter}_with_db_side_effect_to_topic") do |topic|
+      meta = class << topic; self; end
+      meta.send("define_method", "before_#{filter}_for_transaction") do
+        Book.create
+        false
       end
     end
-
-    def add_exception_raising_after_save_callback_to_topic
-      Topic.class_eval <<-eoruby, __FILE__, __LINE__ + 1
-        remove_method(:after_save_for_transaction)
-        def after_save_for_transaction
-          raise 'Make the transaction rollback'
-        end
-      eoruby
-    end
-
-    def remove_exception_raising_after_save_callback_to_topic
-      Topic.class_eval <<-eoruby, __FILE__, __LINE__ + 1
-        remove_method :after_save_for_transaction
-        def after_save_for_transaction; end
-      eoruby
-    end
-
-    def add_exception_raising_after_create_callback_to_topic
-      Topic.class_eval <<-eoruby, __FILE__, __LINE__ + 1
-        remove_method(:after_create_for_transaction)
-        def after_create_for_transaction
-          raise 'Make the transaction rollback'
-        end
-      eoruby
-    end
-
-    def remove_exception_raising_after_create_callback_to_topic
-      Topic.class_eval <<-eoruby, __FILE__, __LINE__ + 1
-        remove_method :after_create_for_transaction
-        def after_create_for_transaction; end
-      eoruby
-    end
-
-    %w(validation save destroy).each do |filter|
-      define_method("add_cancelling_before_#{filter}_with_db_side_effect_to_topic") do
-        Topic.class_eval <<-eoruby, __FILE__, __LINE__ + 1
-          remove_method :before_#{filter}_for_transaction
-          def before_#{filter}_for_transaction
-            Book.create
-            false
-          end
-        eoruby
-      end
-
-      define_method("remove_cancelling_before_#{filter}_with_db_side_effect_to_topic") do
-        Topic.class_eval <<-eoruby, __FILE__, __LINE__ + 1
-          remove_method :before_#{filter}_for_transaction
-          def before_#{filter}_for_transaction; end
-        eoruby
-      end
-    end
+  end
 end
 
 class TransactionsWithTransactionalFixturesTest < ActiveRecord::TestCase
@@ -508,8 +533,6 @@ end if Topic.connection.supports_savepoints?
 
 if current_adapter?(:PostgreSQLAdapter)
   class ConcurrentTransactionTest < TransactionTest
-    use_concurrent_connections
-
     # This will cause transactions to overlap and fail unless they are performed on
     # separate database connections.
     def test_transaction_per_thread
@@ -523,6 +546,7 @@ if current_adapter?(:PostgreSQLAdapter)
               topic.approved = !topic.approved?
               topic.save!
             end
+            Topic.connection.close
           end
         end
 
@@ -558,6 +582,7 @@ if current_adapter?(:PostgreSQLAdapter)
               dev = Developer.find(1)
               assert_equal original_salary, dev.salary
             end
+            Developer.connection.close
           end
         end
 
@@ -570,12 +595,22 @@ if current_adapter?(:PostgreSQLAdapter)
               assert_equal original_salary, Developer.find(1).salary
             end
           end
+          Developer.connection.close
         end
 
         threads.each { |t| t.join }
       end
 
       assert_equal original_salary, Developer.find(1).salary
+    end
+
+    test "#transaction_joinable= is deprecated" do
+      Developer.transaction do
+        conn = Developer.connection
+        assert conn.current_transaction.joinable?
+        assert_deprecated { conn.transaction_joinable = false }
+        assert !conn.current_transaction.joinable?
+      end
     end
   end
 end

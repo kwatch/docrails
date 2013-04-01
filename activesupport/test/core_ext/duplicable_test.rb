@@ -1,24 +1,38 @@
 require 'abstract_unit'
 require 'bigdecimal'
 require 'active_support/core_ext/object/duplicable'
+require 'active_support/core_ext/numeric/time'
 
-class DuplicableTest < Test::Unit::TestCase
-  NO  = [nil, false, true, :symbol, 1, 2.3, BigDecimal.new('4.56'), Class.new]
-  YES = ['1', Object.new, /foo/, [], {}, Time.now]
+class DuplicableTest < ActiveSupport::TestCase
+  RAISE_DUP  = [nil, false, true, :symbol, 1, 2.3, 5.seconds]
+  YES = ['1', Object.new, /foo/, [], {}, Time.now, Class.new, Module.new]
+  NO = []
+
+  begin
+    bd = BigDecimal.new('4.56')
+    YES << bd.dup
+  rescue TypeError
+    RAISE_DUP << bd
+  end
+
 
   def test_duplicable
-    NO.each do |v|
+    (RAISE_DUP + NO).each do |v|
       assert !v.duplicable?
-      begin
-        v.dup
-        fail
-      rescue Exception
-      end
     end
 
     YES.each do |v|
-      assert v.duplicable?
+      assert v.duplicable?, "#{v.class} should be duplicable"
+    end
+
+    (YES + NO).each do |v|
       assert_nothing_raised { v.dup }
+    end
+
+    RAISE_DUP.each do |v|
+      assert_raises(TypeError, v.class.name) do
+        v.dup
+      end
     end
   end
 end

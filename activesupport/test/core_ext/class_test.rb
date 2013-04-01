@@ -1,29 +1,28 @@
 require 'abstract_unit'
 require 'active_support/core_ext/class'
+require 'set'
 
-class A
-end
+class ClassTest < ActiveSupport::TestCase
+  class Parent; end
+  class Foo < Parent; end
+  class Bar < Foo; end
+  class Baz < Bar; end
 
-module X
-  class B
+  class A < Parent; end
+  class B < A; end
+  class C < B; end
+
+  def test_descendants
+    assert_equal [Foo, Bar, Baz, A, B, C].to_set, Parent.descendants.to_set
+    assert_equal [Bar, Baz].to_set, Foo.descendants.to_set
+    assert_equal [Baz], Bar.descendants
+    assert_equal [], Baz.descendants
   end
-end
 
-module Y
-  module Z
-    class C
-    end
-  end
-end
-
-class ClassTest < Test::Unit::TestCase
-  def test_retrieving_subclasses
-    @parent   = eval("class D; end; D")
-    @sub      = eval("class E < D; end; E")
-    @subofsub = eval("class F < E; end; F")
-    assert_equal 2, @parent.subclasses.size
-    assert_equal [@subofsub.to_s], @sub.subclasses
-    assert_equal [], @subofsub.subclasses
-    assert_equal [@sub.to_s, @subofsub.to_s].sort, @parent.subclasses.sort
+  def test_subclasses
+    assert_equal [Foo, A].to_set, Parent.subclasses.to_set
+    assert_equal [Bar], Foo.subclasses
+    assert_equal [Baz], Bar.subclasses
+    assert_equal [], Baz.subclasses
   end
 end

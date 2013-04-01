@@ -4,11 +4,12 @@ module AbstractController
   module Helpers
     extend ActiveSupport::Concern
 
-    include Rendering
-
     included do
       class_attribute :_helpers
       self._helpers = Module.new
+
+      class_attribute :_helper_methods
+      self._helper_methods = Array.new
     end
 
     module ClassMethods
@@ -18,7 +19,7 @@ module AbstractController
       def inherited(klass)
         helpers = _helpers
         klass._helpers = Module.new { include helpers }
-        klass.class_eval { default_helper_module! unless anonymous? }
+        klass.class_eval { default_helper_module! } unless klass.anonymous?
         super
       end
 
@@ -31,39 +32,41 @@ module AbstractController
       #       @current_user ||= User.find_by_id(session[:user])
       #     end
       #
-      #      def logged_in?
-      #        current_user != nil
-      #      end
+      #     def logged_in?
+      #       current_user != nil
+      #     end
       #   end
       #
       # In a view:
       #  <% if logged_in? -%>Welcome, <%= current_user.name %><% end -%>
       #
       # ==== Parameters
-      # meths<Array[#to_s]>:: The name of a method on the controller
+      # * <tt>method[, method]</tt> - A name or names of a method on the controller
       #   to be made available on the view.
       def helper_method(*meths)
-        meths.flatten.each do |meth|
+        meths.flatten!
+        self._helper_methods += meths
+
+        meths.each do |meth|
           _helpers.class_eval <<-ruby_eval, __FILE__, __LINE__ + 1
-            def #{meth}(*args, &blk)
-              controller.send(%(#{meth}), *args, &blk)
-            end
+            def #{meth}(*args, &blk)                               # def current_user(*args, &blk)
+              controller.send(%(#{meth}), *args, &blk)             #   controller.send(:current_user, *args, &blk)
+            end                                                    # end
           ruby_eval
         end
       end
 
       # The +helper+ class method can take a series of helper module names, a block, or both.
       #
-      # ==== Parameters
-      # *args<Array[Module, Symbol, String, :all]>
-      # block<Block>:: A block defining helper methods
+      # ==== Options
+      # * <tt>*args</tt> - Module, Symbol, String
+      # * <tt>block</tt> - A block defining helper methods
       #
-      # ==== Examples
       # When the argument is a module it will be included directly in the template class.
       #   helper FooHelper # => includes FooHelper
       #
       # When the argument is a string or symbol, the method will provide the "_helper" suffix, require the file
-      # and include the module in the template class.  The second form illustrates how to include custom helpers
+      # and include the module in the template class. The second form illustrates how to include custom helpers
       # when working with namespaced controllers, or other cases where the file containing the helper definition is not
       # in one of Rails' standard load paths:
       #   helper :foo             # => requires 'foo_helper' and includes FooHelper
@@ -95,22 +98,22 @@ module AbstractController
         _helpers.module_eval(&block) if block_given?
       end
 
-      private
-      # Makes all the (instance) methods in the helper module available to templates
-      # rendered through this controller.
-      #
-      # ==== Parameters
-      # mod<Module>:: The module to include into the current helper module
-      #   for the class
-      def add_template_helper(mod)
-        _helpers.module_eval { include mod }
+      # Clears up all existing helpers in this class, only keeping the helper
+      # with the same name as this class.
+      def clear_helpers
+        inherited_helper_methods = _helper_methods
+        self._helpers = Module.new
+        self._helper_methods = Array.new
+
+        inherited_helper_methods.each { |meth| helper_method meth }
+        default_helper_module! unless anonymous?
       end
 
       # Returns a list of modules, normalized from the acceptable kinds of
       # helpers with the following behavior:
       #
       # String or Symbol:: :FooBar or "FooBar" becomes "foo_bar_helper",
-      #   and "foo_bar_helper.rb" is loaded using require_dependency.
+      # and "foo_bar_helper.rb" is loaded using require_dependency.
       #
       # Module:: No further processing
       #
@@ -118,17 +121,21 @@ module AbstractController
       # are returned.
       #
       # ==== Parameters
-      # args<Array[String, Symbol, Module]>:: A list of helpers
+      # * <tt>args</tt> - An array of helpers
       #
       # ==== Returns
-      # Array[Module]:: A normalized list of modules for the list of
+      # * <tt>Array</tt> - A normalized list of modules for the list of
       #   helpers provided.
       def modules_for_helpers(args)
         args.flatten.map! do |arg|
           case arg
           when String, Symbol
             file_name = "#{arg.to_s.underscore}_helper"
-            require_dependency(file_name, "Missing helper file helpers/%s.rb")
+            begin
+              require_dependency(file_name)
+            rescue LoadError => e
+              raise MissingHelperError.new(e, file_name)
+            end
             file_name.camelize.constantize
           when Module
             arg
@@ -136,6 +143,26 @@ module AbstractController
             raise ArgumentError, "helper must be a String, Symbol, or Module"
           end
         end
+      end
+
+      class MissingHelperError < LoadError
+        def initialize(error, path)
+          @error = error
+          @path  = "helpers/#{path}.rb"
+          set_backtrace error.backtrace
+          super("Missing helper file helpers/%s.rb" % path)
+        end
+      end
+
+      private
+      # Makes all the (instance) methods in the helper module available to templates
+      # rendered through this controller.
+      #
+      # ==== Parameters
+      # * <tt>module</tt> - The module to include into the current helper module
+      #   for the class
+      def add_template_helper(mod)
+        _helpers.module_eval { include mod }
       end
 
       def default_helper_module!

@@ -1,9 +1,6 @@
-require 'rubygems'
-require 'rake'
 require 'rake/testtask'
-require 'rake/rdoctask'
 require 'rake/packagetask'
-require 'rake/gempackagetask'
+require 'rubygems/package_task'
 
 desc "Default Task"
 task :default => :test
@@ -18,14 +15,21 @@ Rake::TestTask.new(:test_action_pack) do |t|
 
   # make sure we include the tests in alphabetical order as on some systems
   # this will not happen automatically and the tests (as a whole) will error
-  t.test_files = Dir.glob('test/{abstract,controller,dispatch,template}/**/*_test.rb').sort
+  t.test_files = Dir.glob('test/{abstract,controller,dispatch,template,assertions,journey}/**/*_test.rb').sort
 
-  # t.warning = true
+  t.warning = true
+  t.verbose = true
 end
 
 namespace :test do
   Rake::TestTask.new(:isolated) do |t|
+    t.libs << 'test'
     t.pattern = 'test/ts_isolated.rb'
+  end
+
+  Rake::TestTask.new(:template) do |t|
+    t.libs << 'test'
+    t.pattern = 'test/template/**/*.rb'
   end
 end
 
@@ -35,27 +39,9 @@ Rake::TestTask.new(:test_active_record_integration) do |t|
   t.test_files = Dir.glob("test/activerecord/*_test.rb")
 end
 
-# Genereate the RDoc documentation
-
-Rake::RDocTask.new { |rdoc|
-  rdoc.rdoc_dir = 'doc'
-  rdoc.title    = "Action Pack -- On rails from request to response"
-  rdoc.options << '--line-numbers' << '--inline-source'
-  rdoc.options << '--charset' << 'utf-8'
-  rdoc.template = ENV['template'] ? "#{ENV['template']}.rb" : '../doc/template/horo'
-  if ENV['DOC_FILES']
-    rdoc.rdoc_files.include(ENV['DOC_FILES'].split(/,\s*/))
-  else
-    rdoc.rdoc_files.include('README', 'RUNNING_UNIT_TESTS', 'CHANGELOG')
-    rdoc.rdoc_files.include(Dir['lib/**/*.rb'] -
-                            Dir['lib/*/vendor/**/*.rb'])
-    rdoc.rdoc_files.exclude('lib/actionpack.rb')
-  end
-}
-
 spec = eval(File.read('actionpack.gemspec'))
 
-Rake::GemPackageTask.new(spec) do |p|
+Gem::PackageTask.new(spec) do |p|
   p.gem_spec = spec
 end
 
@@ -69,15 +55,15 @@ end
 task :lines do
   lines, codelines, total_lines, total_codelines = 0, 0, 0, 0
 
-  for file_name in FileList["lib/**/*.rb"]
+  FileList["lib/**/*.rb"].each do |file_name|
     next if file_name =~ /vendor/
-    f = File.open(file_name)
-
-    while line = f.gets
-      lines += 1
-      next if line =~ /^\s*$/
-      next if line =~ /^\s*#/
-      codelines += 1
+    File.open(file_name, 'r') do |f|
+      while line = f.gets
+        lines += 1
+        next if line =~ /^\s*$/
+        next if line =~ /^\s*#/
+        codelines += 1
+      end
     end
     puts "L: #{sprintf("%4d", lines)}, LOC #{sprintf("%4d", codelines)} | #{file_name}"
 
@@ -89,3 +75,9 @@ task :lines do
 
   puts "Total: Lines #{total_lines}, LOC #{total_codelines}"
 end
+
+rule '.rb' => '.y' do |t|
+  sh "racc -l -o #{t.name} #{t.source}"
+end
+
+task compile: 'lib/action_dispatch/journey/parser.rb'

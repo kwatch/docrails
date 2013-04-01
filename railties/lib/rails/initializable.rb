@@ -2,7 +2,7 @@ require 'tsort'
 
 module Rails
   module Initializable
-    def self.included(base)
+    def self.included(base) #:nodoc:
       base.extend ClassMethods
     end
 
@@ -10,6 +10,7 @@ module Rails
       attr_reader :name, :block
 
       def initialize(name, context, options, &block)
+        options[:group] ||= :default
         @name, @context, @options, @block = name, context, options, block
       end
 
@@ -19,6 +20,10 @@ module Rails
 
       def after
         @options[:after]
+      end
+
+      def belongs_to?(group)
+        @options[:group] == group || @options[:group] == :all
       end
 
       def run(*args)
@@ -39,20 +44,15 @@ module Rails
         select { |i| i.before == initializer.name || i.name == initializer.after }.each(&block)
       end
 
-      def initialize(initializers = [])
-        super(initializers)
-        replace(tsort)
-      end
-
       def +(other)
         Collection.new(to_a + other.to_a)
       end
     end
 
-    def run_initializers(*args)
+    def run_initializers(group=:default, *args)
       return if instance_variable_defined?(:@ran)
-      initializers.each do |initializer|
-        initializer.run(*args)
+      initializers.tsort_each do |initializer|
+        initializer.run(*args) if initializer.belongs_to?(group)
       end
       @ran = true
     end
@@ -63,7 +63,7 @@ module Rails
 
     module ClassMethods
       def initializers
-        @initializers ||= []
+        @initializers ||= Collection.new
       end
 
       def initializers_chain
@@ -83,14 +83,6 @@ module Rails
         raise ArgumentError, "A block must be passed when defining an initializer" unless blk
         opts[:after] ||= initializers.last.name unless initializers.empty? || initializers.find { |i| i.name == opts[:before] }
         initializers << Initializer.new(name, nil, opts, &blk)
-      end
-
-      def run_initializers(*args)
-        return if @ran
-        initializers_chain.each do |initializer|
-          instance_exec(*args, &initializer.block)
-        end
-        @ran = true
       end
     end
   end

@@ -1,34 +1,40 @@
-require 'active_support/core_ext/array/wrap'
-require 'active_support/core_ext/object/blank'
+require 'thread_safe'
+require 'active_support/core_ext/module/remove_method'
 
 module ActionView
+  # = Action View Lookup Context
+  #
   # LookupContext is the object responsible to hold all information required to lookup
   # templates, i.e. view paths and details. The LookupContext is also responsible to
   # generate a key, given to view paths, used in the resolver cache lookup. Since
   # this key is generated just once during the request, it speeds up all cache accesses.
   class LookupContext #:nodoc:
+    attr_accessor :prefixes, :rendered_format
+
     mattr_accessor :fallbacks
-    @@fallbacks = [FileSystemResolver.new(""), FileSystemResolver.new("/")]
+    @@fallbacks = FallbackFileSystemResolver.instances
 
     mattr_accessor :registered_details
     self.registered_details = []
 
     def self.register_detail(name, options = {}, &block)
       self.registered_details << name
-      Accessors.send :define_method, :"_#{name}_defaults", &block
+      initialize = registered_details.map { |n| "@details[:#{n}] = details[:#{n}] || default_#{n}" }
+
+      Accessors.send :define_method, :"default_#{name}", &block
       Accessors.module_eval <<-METHOD, __FILE__, __LINE__ + 1
         def #{name}
-          @details[:#{name}]
+          @details.fetch(:#{name}, [])
         end
 
         def #{name}=(value)
-          value = Array.wrap(value.presence || _#{name}_defaults)
+          value = value.present? ? Array(value) : default_#{name}
+          _set_detail(:#{name}, value) if value != @details[:#{name}]
+        end
 
-          if value != @details[:#{name}]
-            @details_key = nil
-            @details = @details.dup if @details.frozen?
-            @details[:#{name}] = value.freeze
-          end
+        remove_possible_method :initialize_details
+        def initialize_details(details)
+          #{initialize.join("\n")}
         end
       METHOD
     end
@@ -37,18 +43,23 @@ module ActionView
     module Accessors #:nodoc:
     end
 
-    register_detail(:formats) { Mime::SET.symbols }
-    register_detail(:locale)  { [I18n.locale, I18n.default_locale] }
+    register_detail(:locale)  { [I18n.locale, I18n.default_locale].uniq }
+    register_detail(:formats) { ActionView::Base.default_formats || [:html, :text, :js, :css,  :xml, :json] }
+    register_detail(:handlers){ Template::Handlers.extensions }
 
     class DetailsKey #:nodoc:
       alias :eql? :equal?
       alias :object_hash :hash
 
       attr_reader :hash
-      @details_keys = Hash.new
+      @details_keys = ThreadSafe::Cache.new
 
       def self.get(details)
-        @details_keys[details.freeze] ||= new
+        @details_keys[details] ||= new
+      end
+
+      def self.clear
+        @details_keys.clear
       end
 
       def initialize
@@ -56,33 +67,54 @@ module ActionView
       end
     end
 
-    def initialize(view_paths, details = {})
-      @details, @details_key = { :handlers => default_handlers }, nil
-      @frozen_formats, @skip_default_locale = false, false
-      self.view_paths = view_paths
-      self.update_details(details, true)
+    # Add caching behavior on top of Details.
+    module DetailsCache
+      attr_accessor :cache
+
+      # Calculate the details key. Remove the handlers from calculation to improve performance
+      # since the user cannot modify it explicitly.
+      def details_key #:nodoc:
+        @details_key ||= DetailsKey.get(@details) if @cache
+      end
+
+      # Temporary skip passing the details_key forward.
+      def disable_cache
+        old_value, @cache = @cache, false
+        yield
+      ensure
+        @cache = old_value
+      end
+
+    protected
+
+      def _set_detail(key, value)
+        @details = @details.dup if @details_key
+        @details_key = nil
+        @details[key] = value
+      end
     end
 
+    # Helpers related to template lookup using the lookup context information.
     module ViewPaths
-      attr_reader :view_paths
+      attr_reader :view_paths, :html_fallback_for_js
 
       # Whenever setting view paths, makes a copy so we can manipulate then in
       # instance objects as we wish.
       def view_paths=(paths)
-        @view_paths = ActionView::Base.process_view_paths(paths)
+        @view_paths = ActionView::PathSet.new(Array(paths))
       end
 
-      def find(name, prefix = nil, partial = false)
-        @view_paths.find(*args_for_lookup(name, prefix, partial))
+      def find(name, prefixes = [], partial = false, keys = [], options = {})
+        @view_paths.find(*args_for_lookup(name, prefixes, partial, keys, options))
       end
       alias :find_template :find
 
-      def find_all(name, prefix = nil, partial = false)
-        @view_paths.find_all(*args_for_lookup(name, prefix, partial))
+      def find_all(name, prefixes = [], partial = false, keys = [], options = {})
+        @view_paths.find_all(*args_for_lookup(name, prefixes, partial, keys, options))
       end
 
-      def exists?(name, prefix = nil, partial = false)
-        @view_paths.exists?(*args_for_lookup(name, prefix, partial))
+      def exists?(name, prefixes = [], partial = false, keys = [], options = {})
+        @view_paths.exists?(*args_for_lookup(name, prefixes, partial, keys, options))
       end
       alias :template_exists? :exists?
 
@@ -101,97 +133,102 @@ module ActionView
 
     protected
 
-      def args_for_lookup(name, prefix, partial) #:nodoc:
-        name, prefix = normalize_name(name, prefix)
-        [name, prefix, partial || false, @details, details_key]
+      def args_for_lookup(name, prefixes, partial, keys, details_options) #:nodoc:
+        name, prefixes = normalize_name(name, prefixes)
+        details, details_key = detail_args_for(details_options)
+        [name, prefixes, partial || false, details, details_key, keys]
+      end
+
+      # Compute details hash and key according to user options (e.g. passed from #render).
+      def detail_args_for(options)
+        return @details, details_key if options.empty? # most common path.
+        user_details = @details.merge(options)
+        [user_details, DetailsKey.get(user_details)]
       end
 
       # Support legacy foo.erb names even though we now ignore .erb
       # as well as incorrectly putting part of the path in the template
       # name instead of the prefix.
-      def normalize_name(name, prefix) #:nodoc:
-        name  = name.to_s.gsub(handlers_regexp, '')
-        parts = name.split('/')
-        return parts.pop, [prefix, *parts].compact.join("/")
-      end
+      def normalize_name(name, prefixes) #:nodoc:
+        prefixes = prefixes.presence
+        parts    = name.to_s.split('/')
+        parts.shift if parts.first.empty?
+        name     = parts.pop
 
-      def default_handlers #:nodoc:
-        @default_handlers ||= Template::Handlers.extensions
-      end
+        return name, prefixes || [""] if parts.empty?
 
-      def handlers_regexp #:nodoc:
-        @handlers_regexp ||= /\.(?:#{default_handlers.join('|')})$/
-      end
-    end
+        parts    = parts.join('/')
+        prefixes = prefixes ? prefixes.map { |p| "#{p}/#{parts}" } : [parts]
 
-    module Details
-      # Calculate the details key. Remove the handlers from calculation to improve performance
-      # since the user cannot modify it explicitly.
-      def details_key #:nodoc:
-        @details_key ||= DetailsKey.get(@details)
-      end
-
-      # Freeze the current formats in the lookup context. By freezing them, you are guaranteeing
-      # that next template lookups are not going to modify the formats. The controller can also
-      # use this, to ensure that formats won't be further modified (as it does in respond_to blocks).
-      def freeze_formats(formats, unless_frozen=false) #:nodoc:
-        return if unless_frozen && @frozen_formats
-        self.formats = formats
-        @frozen_formats = true
-      end
-
-      # Overload formats= to reject [:"*/*"] values.
-      def formats=(value)
-        value = nil    if value == [:"*/*"]
-        value << :html if value == [:js]
-        super(value)
-      end
-
-      # Do not use the default locale on template lookup.
-      def skip_default_locale!
-        @skip_default_locale = true
-        self.locale = nil
-      end
-
-      # Overload locale to return a symbol instead of array.
-      def locale
-        @details[:locale].first
-      end
-
-      # Overload locale= to also set the I18n.locale. If the current I18n.config object responds
-      # to i18n_config, it means that it's has a copy of the original I18n configuration and it's
-      # acting as proxy, which we need to skip.
-      def locale=(value)
-        if value
-          config = I18n.config.respond_to?(:i18n_config) ? I18n.config.i18n_config : I18n.config
-          config.locale = value
-        end
-
-        super(@skip_default_locale ? I18n.locale : _locale_defaults)
-      end
-
-      # Update the details keys by merging the given hash into the current
-      # details hash. If a block is given, the details are modified just during
-      # the execution of the block and reverted to the previous value after.
-      def update_details(new_details, force=false)
-        old_details = @details.dup
-
-        registered_details.each do |key|
-          send(:"#{key}=", new_details[key]) if force || new_details.key?(key)
-        end
-
-        if block_given?
-          begin
-            yield
-          ensure
-            @details = old_details
-          end
-        end
+        return name, prefixes
       end
     end
 
     include Accessors
-    include Details
+    include DetailsCache
     include ViewPaths
+
+    def initialize(view_paths, details = {}, prefixes = [])
+      @details, @details_key = {}, nil
+      @skip_default_locale = false
+      @cache = true
+      @prefixes = prefixes
+      @rendered_format = nil
+
+      self.view_paths = view_paths
+      initialize_details(details)
+    end
+
+    # Override formats= to expand ["*/*"] values and automatically
+    # add :html as fallback to :js.
+    def formats=(values)
+      if values
+        values.concat(default_formats) if values.delete "*/*"
+        if values == [:js]
+          values << :html
+          @html_fallback_for_js = true
+        end
+      end
+      super(values)
+    end
+
+    # Do not use the default locale on template lookup.
+    def skip_default_locale!
+      @skip_default_locale = true
+      self.locale = nil
+    end
+
+    # Override locale to return a symbol instead of array.
+    def locale
+      @details[:locale].first
+    end
+
+    # Overload locale= to also set the I18n.locale. If the current I18n.config object responds
+    # to original_config, it means that it's has a copy of the original I18n configuration and it's
+    # acting as proxy, which we need to skip.
+    def locale=(value)
+      if value
+        config = I18n.config.respond_to?(:original_config) ? I18n.config.original_config : I18n.config
+        config.locale = value
+      end
+
+      super(@skip_default_locale ? I18n.locale : default_locale)
+    end
+
+    # A method which only uses the first format in the formats array for layout lookup.
+    def with_layout_format
+      if formats.size == 1
+        yield
+      else
+        old_formats = formats
+        _set_detail(:formats, formats[0,1])
+
+        begin
+          yield
+        ensure
+          _set_detail(:formats, old_formats)
+        end
+      end
+    end
   end
 end

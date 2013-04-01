@@ -1,13 +1,17 @@
 require "isolation/abstract_unit"
 
 module ApplicationTests
-  class LoadPathTest < Test::Unit::TestCase
+  class LoadPathTest < ActiveSupport::TestCase
     include ActiveSupport::Testing::Isolation
 
     def setup
       build_app
       boot_rails
       FileUtils.rm_rf "#{app_path}/config/environments"
+    end
+
+    def teardown
+      teardown_app
     end
 
     test "initializing an application adds the application paths to the load path" do
@@ -17,6 +21,23 @@ module ApplicationTests
 
       require "#{app_path}/config/environment"
       assert $:.include?("#{app_path}/app/models")
+    end
+
+    test "initializing an application allows to load code on lib path inside application class definitation" do
+      app_file "lib/foo.rb", <<-RUBY
+        module Foo; end
+      RUBY
+
+      add_to_config <<-RUBY
+        require "foo"
+        raise "Expected Foo to be defined" unless defined?(Foo)
+      RUBY
+
+      assert_nothing_raised do
+        require "#{app_path}/config/environment"
+      end
+
+      assert $:.include?("#{app_path}/lib")
     end
 
     test "initializing an application eager load any path under app" do

@@ -18,7 +18,7 @@ class TestRequestTest < ActiveSupport::TestCase
     assert_equal "0.0.0.0", env.delete("REMOTE_ADDR")
     assert_equal "Rails Testing", env.delete("HTTP_USER_AGENT")
 
-    assert_equal [1, 1], env.delete("rack.version")
+    assert_equal [1, 2], env.delete("rack.version")
     assert_equal "", env.delete("rack.input").string
     assert_kind_of StringIO, env.delete("rack.errors")
     assert_equal true, env.delete("rack.multithread")
@@ -34,12 +34,36 @@ class TestRequestTest < ActiveSupport::TestCase
     assert_equal({}, req.cookies)
     assert_equal nil, req.env["HTTP_COOKIE"]
 
-    req.cookies["user_name"] = "david"
-    assert_equal({"user_name" => "david"}, req.cookies)
-    assert_equal "user_name=david;", req.env["HTTP_COOKIE"]
+    req.cookie_jar["user_name"] = "david"
+    assert_cookies({"user_name" => "david"}, req.cookie_jar)
 
-    req.cookies["login"] = "XJ-122"
-    assert_equal({"user_name" => "david", "login" => "XJ-122"}, req.cookies)
-    assert_equal %w(login=XJ-122 user_name=david), req.env["HTTP_COOKIE"].split(/; ?/).sort
+    req.cookie_jar["login"] = "XJ-122"
+    assert_cookies({"user_name" => "david", "login" => "XJ-122"}, req.cookie_jar)
+
+    assert_nothing_raised do
+      req.cookie_jar["login"] = nil
+      assert_cookies({"user_name" => "david", "login" => nil}, req.cookie_jar)
+    end
+
+    req.cookie_jar.delete(:login)
+    assert_cookies({"user_name" => "david"}, req.cookie_jar)
+
+    req.cookie_jar.clear
+    assert_cookies({}, req.cookie_jar)
+
+    req.cookie_jar.update(:user_name => "david")
+    assert_cookies({"user_name" => "david"}, req.cookie_jar)
   end
+
+  test "does not complain when Rails.application is nil" do
+    Rails.stubs(:application).returns(nil)
+    req = ActionDispatch::TestRequest.new
+
+    assert_equal false, req.env.empty?
+  end
+
+  private
+    def assert_cookies(expected, cookie_jar)
+      assert_equal(expected, cookie_jar.instance_variable_get("@cookies"))
+    end
 end

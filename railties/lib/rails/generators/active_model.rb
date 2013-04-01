@@ -1,3 +1,5 @@
+require 'active_support/deprecation'
+
 module Rails
   module Generators
     # ActiveModel is a class to be implemented by each ORM to allow Rails to
@@ -9,16 +11,16 @@ module Rails
     # For example:
     #
     #   ActiveRecord::Generators::ActiveModel.find(Foo, "params[:id]")
-    #   #=> "Foo.find(params[:id])"
+    #   # => "Foo.find(params[:id])"
     #
-    #   Datamapper::Generators::ActiveModel.find(Foo, "params[:id]")
-    #   #=> "Foo.get(params[:id])"
+    #   DataMapper::Generators::ActiveModel.find(Foo, "params[:id]")
+    #   # => "Foo.get(params[:id])"
     #
     # On initialization, the ActiveModel accepts the instance name that will
     # receive the calls:
     #
     #   builder = ActiveRecord::Generators::ActiveModel.new "@foo"
-    #   builder.save #=> "@foo.save"
+    #   builder.save # => "@foo.save"
     #
     # The only exception in ActiveModel for ActiveRecord is the use of self.build
     # instead of self.new.
@@ -37,7 +39,7 @@ module Rails
 
       # GET show
       # GET edit
-      # PUT update
+      # PATCH/PUT update
       # DELETE destroy
       def self.find(klass, params=nil)
         "#{klass}.find(#{params})"
@@ -58,13 +60,19 @@ module Rails
         "#{name}.save"
       end
 
-      # PUT update
-      def update_attributes(params=nil)
-        "#{name}.update_attributes(#{params})"
+      # PATCH/PUT update
+      def update(params=nil)
+        "#{name}.update(#{params})"
+      end
+
+      def update_attributes(*args) # :nodoc:
+        ActiveSupport::Deprecation.warn("Calling '@orm_instance.update_attributes' " \
+          "is deprecated, please use '@orm_instance.update' instead.")
+        update(*args)
       end
 
       # POST create
-      # PUT update
+      # PATCH/PUT update
       def errors
         "#{name}.errors"
       end

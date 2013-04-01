@@ -1,12 +1,16 @@
 require 'isolation/abstract_unit'
 
 module ApplicationTests
-  class TestTest < Test::Unit::TestCase
+  class TestTest < ActiveSupport::TestCase
     include ActiveSupport::Testing::Isolation
 
     def setup
       build_app
       boot_rails
+    end
+
+    def teardown
+      teardown_app
     end
 
     test "truth" do
@@ -20,24 +24,7 @@ module ApplicationTests
         end
       RUBY
 
-      run_test 'unit/foo_test.rb'
-    end
-
-    # Run just in Ruby < 1.9
-    if defined?(Test::Unit::Util::BacktraceFilter)
-      test "adds backtrace cleaner" do
-        app_file 'test/unit/backtrace_test.rb', <<-RUBY
-          require 'test_helper'
-
-          class FooTest < ActiveSupport::TestCase
-            def test_truth
-              assert Test::Unit::Util::BacktraceFilter.ancestors.include?(Rails::BacktraceFilterForTestUnit)
-            end
-          end
-        RUBY
-
-        run_test 'unit/backtrace_test.rb'
-      end
+      run_test_file 'unit/foo_test.rb'
     end
 
     test "integration test" do
@@ -53,7 +40,7 @@ module ApplicationTests
       app_file 'test/integration/posts_test.rb', <<-RUBY
         require 'test_helper'
 
-        class PostsTest < ActionController::IntegrationTest
+        class PostsTest < ActionDispatch::IntegrationTest
           def test_index
             get '/posts'
             assert_response :success
@@ -62,11 +49,11 @@ module ApplicationTests
         end
       RUBY
 
-      run_test 'integration/posts_test.rb'
+      run_test_file 'integration/posts_test.rb'
     end
 
     private
-      def run_test(name)
+      def run_test_file(name)
         result = ruby '-Itest', "#{app_path}/test/#{name}"
         assert_equal 0, $?.to_i, result
       end

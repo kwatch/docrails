@@ -1,42 +1,34 @@
 require 'abstract_unit'
 
-module ActionDispatch
-  class ShowExceptions
-    private
-      def public_path
-        "#{FIXTURE_LOAD_PATH}/public"
-      end
+class ShowExceptionsTest < ActionDispatch::IntegrationTest
 
-      # Silence logger
-      def logger
-        nil
+  class Boomer
+    def call(env)
+      req = ActionDispatch::Request.new(env)
+      case req.path
+      when "/not_found"
+        raise AbstractController::ActionNotFound
+      when "/method_not_allowed"
+        raise ActionController::MethodNotAllowed
+      when "/not_found_original_exception"
+        raise ActionView::Template::Error.new('template', AbstractController::ActionNotFound.new)
+      else
+        raise "puke!"
       end
-  end
-end
-
-class ShowExceptionsTest < ActionController::IntegrationTest
-  Boomer = lambda do |env|
-    req = ActionDispatch::Request.new(env)
-    case req.path
-    when "/not_found"
-      raise ActionController::UnknownAction
-    when "/method_not_allowed"
-      raise ActionController::MethodNotAllowed
-    when "/not_implemented"
-      raise ActionController::NotImplemented
-    when "/unprocessable_entity"
-      raise ActionController::InvalidAuthenticityToken
-    else
-      raise "puke!"
     end
   end
 
-  ProductionApp = ActionDispatch::ShowExceptions.new(Boomer, false)
-  DevelopmentApp = ActionDispatch::ShowExceptions.new(Boomer, true)
+  ProductionApp = ActionDispatch::ShowExceptions.new(Boomer.new, ActionDispatch::PublicExceptions.new("#{FIXTURE_LOAD_PATH}/public"))
 
-  test "rescue in public from a remote ip" do
+  test "skip exceptions app if not showing exceptions" do
     @app = ProductionApp
-    self.remote_addr = '208.77.188.166'
+    assert_raise RuntimeError do
+      get "/", {}, {'action_dispatch.show_exceptions' => false}
+    end
+  end
+
+  test "rescue with error page" do
+    @app = ProductionApp
 
     get "/", {}, {'action_dispatch.show_exceptions' => true}
     assert_response 500
@@ -51,32 +43,11 @@ class ShowExceptionsTest < ActionController::IntegrationTest
     assert_equal "", body
   end
 
-  test "rescue locally from a local request" do
-    @app = ProductionApp
-    ['127.0.0.1', '::1'].each do |ip_address|
-      self.remote_addr = ip_address
-
-      get "/", {}, {'action_dispatch.show_exceptions' => true}
-      assert_response 500
-      assert_match /puke/, body
-
-      get "/not_found", {}, {'action_dispatch.show_exceptions' => true}
-      assert_response 404
-      assert_match /#{ActionController::UnknownAction.name}/, body
-
-      get "/method_not_allowed", {}, {'action_dispatch.show_exceptions' => true}
-      assert_response 405
-      assert_match /ActionController::MethodNotAllowed/, body
-    end
-  end
-
-  test "localize public rescue message" do
-    # Change locale
+  test "localize rescue error page" do
     old_locale, I18n.locale = I18n.locale, :da
 
     begin
       @app = ProductionApp
-      self.remote_addr = '208.77.188.166'
 
       get "/", {}, {'action_dispatch.show_exceptions' => true}
       assert_response 500
@@ -90,29 +61,42 @@ class ShowExceptionsTest < ActionController::IntegrationTest
     end
   end
 
-  test "always rescue locally in development mode" do
-    @app = DevelopmentApp
-    self.remote_addr = '208.77.188.166'
+  test "sets the HTTP charset parameter" do
+    @app = ProductionApp
 
     get "/", {}, {'action_dispatch.show_exceptions' => true}
-    assert_response 500
-    assert_match /puke/, body
-
-    get "/not_found", {}, {'action_dispatch.show_exceptions' => true}
-    assert_response 404
-    assert_match /#{ActionController::UnknownAction.name}/, body
-
-    get "/method_not_allowed", {}, {'action_dispatch.show_exceptions' => true}
-    assert_response 405
-    assert_match /ActionController::MethodNotAllowed/, body
+    assert_equal "text/html; charset=utf-8", response.headers["Content-Type"]
   end
 
-  test "does not show filtered parameters" do
-    @app = DevelopmentApp
+  test "show registered original exception for wrapped exceptions" do
+    @app = ProductionApp
 
-    get "/", {"foo"=>"bar"}, {'action_dispatch.show_exceptions' => true,
-      'action_dispatch.parameter_filter' => [:foo]}
-    assert_response 500
-    assert_match "&quot;foo&quot;=&gt;&quot;[FILTERED]&quot;", body
+    get "/not_found_original_exception", {}, {'action_dispatch.show_exceptions' => true}
+    assert_response 404
+    assert_match(/404 error/, body)
+  end
+
+  test "calls custom exceptions app" do
+    exceptions_app = lambda do |env|
+      assert_kind_of AbstractController::ActionNotFound, env["action_dispatch.exception"]
+      assert_equal "/404", env["PATH_INFO"]
+      [404, { "Content-Type" => "text/plain" }, ["YOU FAILED BRO"]]
+    end
+
+    @app = ActionDispatch::ShowExceptions.new(Boomer.new, exceptions_app)
+    get "/not_found_original_exception", {}, {'action_dispatch.show_exceptions' => true}
+    assert_response 404
+    assert_equal "YOU FAILED BRO", body
+  end
+
+  test "returns an empty response if custom exceptions app returns X-Cascade pass" do
+    exceptions_app = lambda do |env|
+      [404, { "X-Cascade" => "pass" }, []]
+    end
+
+    @app = ActionDispatch::ShowExceptions.new(Boomer.new, exceptions_app)
+    get "/method_not_allowed", {}, {'action_dispatch.show_exceptions' => true}
+    assert_response 405
+    assert_equal "", body
   end
 end

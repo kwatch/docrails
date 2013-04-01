@@ -1,36 +1,27 @@
-source 'http://rubygems.org'
+source 'https://rubygems.org'
 
-<%- if options.dev? -%>
-gem 'rails', :path => '<%= Rails::Generators::RAILS_DEV_PATH %>'
-gem 'arel',  :git => 'git://github.com/rails/arel.git'
-<%- elsif options.edge? -%>
-gem 'rails', :git => 'git://github.com/rails/rails.git'
-gem 'arel',  :git => 'git://github.com/rails/arel.git'
-<%- else -%>
-gem 'rails', '<%= Rails::VERSION::STRING %>'
+<%= rails_gemfile_entry -%>
 
-# Bundle edge Rails instead:
-# gem 'rails', :git => 'git://github.com/rails/rails.git'
-<%- end -%>
+<%= database_gemfile_entry -%>
 
-<% unless options[:skip_activerecord] -%>
-gem '<%= gem_for_database %>'<% if require_for_database %>, :require => '<%= require_for_database %>'<% end %>
-<% end -%>
+<%= "gem 'jruby-openssl'\n" if defined?(JRUBY_VERSION) -%>
 
-# Use unicorn as the web server
+<%= assets_gemfile_entry %>
+<%= javascript_gemfile_entry -%>
+
+# Build JSON APIs with ease. Read more: https://github.com/rails/jbuilder
+gem 'jbuilder', '~> 1.0.1'
+
+# To use ActiveModel has_secure_password
+# gem 'bcrypt-ruby', '~> 3.0.0'
+
+# Use unicorn as the app server
 # gem 'unicorn'
 
 # Deploy with Capistrano
-# gem 'capistrano'
+# gem 'capistrano', group: :development
 
-# Bundle the extra gems:
-# gem 'bj'
-# gem 'nokogiri', '1.4.1'
-# gem 'sqlite3-ruby', :require => 'sqlite3'
-# gem 'aws-s3', :require => 'aws/s3'
-
-# Bundle gems for certain environments:
-# gem 'rspec', :group => :test
-# group :test do
-#   gem 'webrat'
-# end
+<% unless defined?(JRUBY_VERSION) -%>
+# To use debugger
+# gem 'debugger'
+<% end -%>

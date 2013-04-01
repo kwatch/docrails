@@ -1,4 +1,5 @@
-require 'action_controller/vendor/html-scanner'
+require 'action_view/vendor/html-scanner'
+require 'active_support/core_ext/object/inclusion'
 
 #--
 # Copyright (c) 2006 Assaf Arkin (http://labnotes.org)
@@ -7,9 +8,7 @@ require 'action_controller/vendor/html-scanner'
 
 module ActionDispatch
   module Assertions
-    unless const_defined?(:NO_STRIP)
-      NO_STRIP = %w{pre script style textarea}
-    end
+    NO_STRIP = %w{pre script style textarea}
 
     # Adds the +assert_select+ method for use in Rails functional
     # test cases, which can be used to make assertions on the response HTML of a controller
@@ -20,16 +19,12 @@ module ActionDispatch
     # from the response HTML or elements selected by the enclosing assertion.
     #
     # In addition to HTML responses, you can make the following assertions:
-    # * +assert_select_rjs+ - Assertions on HTML content of RJS update and insertion operations.
+    #
     # * +assert_select_encoded+ - Assertions on HTML encoded inside XML, for example for dealing with feed item descriptions.
     # * +assert_select_email+ - Assertions on the HTML body of an e-mail.
     #
     # Also see HTML::Selector to learn how to use selectors.
     module SelectorAssertions
-      # :call-seq:
-      #   css_select(selector) => array
-      #   css_select(element, selector) => array
-      #
       # Select and return all matching elements.
       #
       # If called with a single argument, uses that argument as a selector
@@ -44,7 +39,6 @@ module ActionDispatch
       # The selector may be a CSS selector expression (String), an expression
       # with substitution values (Array) or an HTML::Selector object.
       #
-      # ==== Examples
       #   # Selects all div tags
       #   divs = css_select("div")
       #
@@ -63,7 +57,6 @@ module ActionDispatch
       #     inputs = css_select(form, "input")
       #     ...
       #   end
-      #
       def css_select(*args)
         # See assert_select to understand what's going on here.
         arg = args.shift
@@ -73,7 +66,7 @@ module ActionDispatch
           arg = args.shift
         elsif arg == nil
           raise ArgumentError, "First argument is either selector or element to select, but nil found. Perhaps you called assert_select with an element that does not exist?"
-        elsif @selected
+        elsif defined?(@selected) && @selected
           matches = []
 
           @selected.each do |selected|
@@ -85,7 +78,7 @@ module ActionDispatch
 
           return matches
         else
-          root = response_from_page_or_rjs
+          root = response_from_page
         end
 
         case arg
@@ -101,10 +94,6 @@ module ActionDispatch
         selector.select(root)
       end
 
-      # :call-seq:
-      #   assert_select(selector, equality?, message?)
-      #   assert_select(element, selector, equality?, message?)
-      #
       # An assertion that selects elements and makes one or more equality tests.
       #
       # If the first argument is an element, selects all matching elements
@@ -166,8 +155,6 @@ module ActionDispatch
       # If the method is called with a block, once all equality tests are
       # evaluated the block is called with an array of all matched elements.
       #
-      # ==== Examples
-      #
       #   # At least one form element
       #   assert_select "form"
       #
@@ -178,7 +165,7 @@ module ActionDispatch
       #   assert_select "title", "Welcome"
       #
       #   # Page title is "Welcome" and there is only one title element
-      #   assert_select "title", {:count=>1, :text=>"Welcome"},
+      #   assert_select "title", {count: 1, text: "Welcome"},
       #       "Wrong title or more than one title element"
       #
       #   # Page contains no forms
@@ -197,6 +184,7 @@ module ActionDispatch
       def assert_select(*args, &block)
         # Start with optional element followed by mandatory selector.
         arg = args.shift
+        @selected ||= nil
 
         if arg.is_a?(HTML::Node)
           # First argument is a node (tag or text, but also HTML root),
@@ -212,7 +200,7 @@ module ActionDispatch
           root.children.concat @selected
         else
           # Otherwise just operate on the response document.
-          root = response_from_page_or_rjs
+          root = response_from_page
         end
 
         # First or second argument is the selector: string and we pass
@@ -267,20 +255,19 @@ module ActionDispatch
         if match_with = equals[:text]
           matches.delete_if do |match|
             text = ""
-            text.force_encoding(match_with.encoding) if text.respond_to?(:force_encoding)
             stack = match.children.reverse
             while node = stack.pop
               if node.tag?
                 stack.concat node.children.reverse
               else
                 content = node.content
-                content.force_encoding(match_with.encoding) if content.respond_to?(:force_encoding)
                 text << content
               end
             end
             text.strip! unless NO_STRIP.include?(match.name)
+            text.sub!(/\A\n/, '') if match.name == "textarea"
             unless match_with.is_a?(Regexp) ? (text =~ match_with) : (text == match_with.to_s)
-              content_mismatch ||= build_message(message, "<?> expected but was\n<?>.", match_with, text)
+              content_mismatch ||= sprintf("<%s> expected but was\n<%s>.", match_with, text)
               true
             end
           end
@@ -289,7 +276,7 @@ module ActionDispatch
             html = match.children.map(&:to_s).join
             html.strip! unless NO_STRIP.include?(match.name)
             unless match_with.is_a?(Regexp) ? (html =~ match_with) : (html == match_with.to_s)
-              content_mismatch ||= build_message(message, "<?> expected but was\n<?>.", match_with, html)
+              content_mismatch ||= sprintf("<%s> expected but was\n<%s>.", match_with, html)
               true
             end
           end
@@ -299,12 +286,15 @@ module ActionDispatch
         message ||= content_mismatch if matches.empty?
         # Test minimum/maximum occurrence.
         min, max, count = equals[:minimum], equals[:maximum], equals[:count]
+
+        # FIXME: minitest provides messaging when we use assert_operator,
+        # so is this custom message really needed?
         message = message || %(Expected #{count_description(min, max, count)} matching "#{selector.to_s}", found #{matches.size}.)
         if count
-          assert matches.size == count, message
+          assert_equal matches.size, count, message
         else
-          assert matches.size >= min, message if min
-          assert matches.size <= max, message if max
+          assert_operator matches.size, :>=, min, message if min
+          assert_operator matches.size, :<=, max, message if max
         end
 
         # If a block is given call that block. Set @selected to allow
@@ -336,151 +326,6 @@ module ActionDispatch
         end
       end
 
-      # :call-seq:
-      #   assert_select_rjs(id?) { |elements| ... }
-      #   assert_select_rjs(statement, id?) { |elements| ... }
-      #   assert_select_rjs(:insert, position, id?) { |elements| ... }
-      #
-      # Selects content from the RJS response.
-      #
-      # === Narrowing down
-      #
-      # With no arguments, asserts that one or more elements are updated or
-      # inserted by RJS statements.
-      #
-      # Use the +id+ argument to narrow down the assertion to only statements
-      # that update or insert an element with that identifier.
-      #
-      # Use the first argument to narrow down assertions to only statements
-      # of that type. Possible values are <tt>:replace</tt>, <tt>:replace_html</tt>,
-      # <tt>:show</tt>, <tt>:hide</tt>, <tt>:toggle</tt>, <tt>:remove</tta>,
-      # <tt>:insert_html</tt> and <tt>:redirect</tt>.
-      #
-      # Use the argument <tt>:insert</tt> followed by an insertion position to narrow
-      # down the assertion to only statements that insert elements in that
-      # position. Possible values are <tt>:top</tt>, <tt>:bottom</tt>, <tt>:before</tt>
-      # and <tt>:after</tt>.
-      #
-      # Use the argument <tt>:redirect</tt> follwed by a path to check that an statement
-      # which redirects to the specified path is generated.
-      #
-      # Using the <tt>:remove</tt> statement, you will be able to pass a block, but it will
-      # be ignored as there is no HTML passed for this statement.
-      #
-      # === Using blocks
-      #
-      # Without a block, +assert_select_rjs+ merely asserts that the response
-      # contains one or more RJS statements that replace or update content.
-      #
-      # With a block, +assert_select_rjs+ also selects all elements used in
-      # these statements and passes them to the block. Nested assertions are
-      # supported.
-      #
-      # Calling +assert_select_rjs+ with no arguments and using nested asserts
-      # asserts that the HTML content is returned by one or more RJS statements.
-      # Using +assert_select+ directly makes the same assertion on the content,
-      # but without distinguishing whether the content is returned in an HTML
-      # or JavaScript.
-      #
-      # ==== Examples
-      #
-      #   # Replacing the element foo.
-      #   # page.replace 'foo', ...
-      #   assert_select_rjs :replace, "foo"
-      #
-      #   # Replacing with the chained RJS proxy.
-      #   # page[:foo].replace ...
-      #   assert_select_rjs :chained_replace, 'foo'
-      #
-      #   # Inserting into the element bar, top position.
-      #   assert_select_rjs :insert, :top, "bar"
-      #
-      #   # Remove the element bar
-      #   assert_select_rjs :remove, "bar"
-      #
-      #   # Changing the element foo, with an image.
-      #   assert_select_rjs "foo" do
-      #     assert_select "img[src=/images/logo.gif""
-      #   end
-      #
-      #   # RJS inserts or updates a list with four items.
-      #   assert_select_rjs do
-      #     assert_select "ol>li", 4
-      #   end
-      #
-      #   # The same, but shorter.
-      #   assert_select "ol>li", 4
-      #
-      #   # Checking for a redirect.
-      #   assert_select_rjs :redirect, root_path
-      def assert_select_rjs(*args, &block)
-        rjs_type = args.first.is_a?(Symbol) ? args.shift : nil
-        id       = args.first.is_a?(String) ? args.shift : nil
-
-        # If the first argument is a symbol, it's the type of RJS statement we're looking
-        # for (update, replace, insertion, etc). Otherwise, we're looking for just about
-        # any RJS statement.
-        if rjs_type
-          if rjs_type == :insert
-            position  = args.shift
-            id = args.shift
-            insertion = "insert_#{position}".to_sym
-            raise ArgumentError, "Unknown RJS insertion type #{position}" unless RJS_STATEMENTS[insertion]
-            statement = "(#{RJS_STATEMENTS[insertion]})"
-          else
-            raise ArgumentError, "Unknown RJS statement type #{rjs_type}" unless RJS_STATEMENTS[rjs_type]
-            statement = "(#{RJS_STATEMENTS[rjs_type]})"
-          end
-        else
-          statement = "#{RJS_STATEMENTS[:any]}"
-        end
-
-        # Next argument we're looking for is the element identifier. If missing, we pick
-        # any element, otherwise we replace it in the statement.
-        pattern = Regexp.new(
-          id ? statement.gsub(RJS_ANY_ID, "\"#{id}\"") : statement
-        )
-
-        # Duplicate the body since the next step involves destroying it.
-        matches = nil
-        case rjs_type
-          when :remove, :show, :hide, :toggle
-            matches = @response.body.match(pattern)
-          else
-            @response.body.gsub(pattern) do |match|
-              html = unescape_rjs(match)
-              matches ||= []
-              matches.concat HTML::Document.new(html).root.children.select { |n| n.tag? }
-              ""
-            end
-        end
-
-        if matches
-          assert_block("") { true } # to count the assertion
-          if block_given? && !([:remove, :show, :hide, :toggle].include? rjs_type)
-            begin
-              in_scope, @selected = @selected, matches
-              yield matches
-            ensure
-              @selected = in_scope
-            end
-          end
-          matches
-        else
-          # RJS statement not found.
-          case rjs_type
-            when :remove, :show, :hide, :toggle
-              flunk_message = "No RJS statement that #{rjs_type.to_s}s '#{id}' was rendered."
-            else
-              flunk_message = "No RJS statement that replaces or inserts HTML content."
-          end
-          flunk args.shift || flunk_message
-        end
-      end
-
-      # :call-seq:
-      #   assert_select_encoded(element?) { |elements| ... }
-      #
       # Extracts the content of an element, treats it as encoded HTML and runs
       # nested assertion on it.
       #
@@ -491,9 +336,8 @@ module ActionDispatch
       # The content of each element is un-encoded, and wrapped in the root
       # element +encoded+. It then calls the block with all un-encoded elements.
       #
-      # ==== Examples
-      #   # Selects all bold tags from within the title of an ATOM feed's entries (perhaps to nab a section name prefix)
-      #   assert_select_feed :atom, 1.0 do
+      #   # Selects all bold tags from within the title of an Atom feed's entries (perhaps to nab a section name prefix)
+      #   assert_select "feed[xmlns='http://www.w3.org/2005/Atom']" do
       #     # Select each entry item and then the title item
       #     assert_select "entry>title" do
       #       # Run assertions on the encoded title elements
@@ -505,7 +349,7 @@ module ActionDispatch
       #
       #
       #   # Selects all paragraph tags from within the description of an RSS feed
-      #   assert_select_feed :rss, 2.0 do
+      #   assert_select "rss[version=2.0]" do
       #     # Select description element of each feed item.
       #     assert_select "channel>item>description" do
       #       # Run assertions on the encoded elements.
@@ -533,8 +377,8 @@ module ActionDispatch
           node.content.gsub(/<!\[CDATA\[(.*)(\]\]>)?/m) { Rack::Utils.escapeHTML($1) }
         end
 
-        selected = elements.map do |element|
-          text = element.children.select{ |c| not c.tag? }.map{ |c| fix_content[c] }.join
+        selected = elements.map do |_element|
+          text = _element.children.select{ |c| not c.tag? }.map{ |c| fix_content[c] }.join
           root = HTML::Document.new(CGI.unescapeHTML("<encoded>#{text}</encoded>")).root
           css_select(root, "encoded:root", &block)[0]
         end
@@ -547,15 +391,10 @@ module ActionDispatch
         end
       end
 
-      # :call-seq:
-      #   assert_select_email { }
-      #
       # Extracts the body of an email and runs nested assertions on it.
       #
       # You must enable deliveries for this assertion to work, use:
       #   ActionMailer::Base.perform_deliveries = true
-      #
-      # ==== Examples
       #
       #  assert_select_email do
       #    assert_select "h1", "Email alert"
@@ -567,15 +406,14 @@ module ActionDispatch
       #       # Work with items here...
       #    end
       #  end
-      #
       def assert_select_email(&block)
         deliveries = ActionMailer::Base.deliveries
         assert !deliveries.empty?, "No e-mail in delivery list"
 
-        for delivery in deliveries
-          for part in delivery.parts
+        deliveries.each do |delivery|
+          (delivery.parts.empty? ? [delivery] : delivery.parts).each do |part|
             if part["Content-Type"].to_s =~ /^text\/html\W/
-              root = HTML::Document.new(part.body).root
+              root = HTML::Document.new(part.body.to_s).root
               assert_select root, ":root", &block
             end
           end
@@ -583,64 +421,9 @@ module ActionDispatch
       end
 
       protected
-        unless const_defined?(:RJS_STATEMENTS)
-          RJS_PATTERN_HTML  = "\"((\\\\\"|[^\"])*)\""
-          RJS_ANY_ID        = "\"([^\"])*\""
-          RJS_STATEMENTS    = {
-            :chained_replace      => "\\$\\(#{RJS_ANY_ID}\\)\\.replace\\(#{RJS_PATTERN_HTML}\\)",
-            :chained_replace_html => "\\$\\(#{RJS_ANY_ID}\\)\\.update\\(#{RJS_PATTERN_HTML}\\)",
-            :replace_html         => "Element\\.update\\(#{RJS_ANY_ID}, #{RJS_PATTERN_HTML}\\)",
-            :replace              => "Element\\.replace\\(#{RJS_ANY_ID}, #{RJS_PATTERN_HTML}\\)",
-            :redirect             => "window.location.href = #{RJS_ANY_ID}"
-          }
-          [:remove, :show, :hide, :toggle].each do |action|
-            RJS_STATEMENTS[action] = "Element\\.#{action}\\(#{RJS_ANY_ID}\\)"
-          end
-          RJS_INSERTIONS = ["top", "bottom", "before", "after"]
-          RJS_INSERTIONS.each do |insertion|
-            RJS_STATEMENTS["insert_#{insertion}".to_sym] = "Element.insert\\(#{RJS_ANY_ID}, \\{ #{insertion}: #{RJS_PATTERN_HTML} \\}\\)"
-          end
-          RJS_STATEMENTS[:insert_html] = "Element.insert\\(#{RJS_ANY_ID}, \\{ (#{RJS_INSERTIONS.join('|')}): #{RJS_PATTERN_HTML} \\}\\)"
-          RJS_STATEMENTS[:any] = Regexp.new("(#{RJS_STATEMENTS.values.join('|')})")
-          RJS_PATTERN_UNICODE_ESCAPED_CHAR = /\\u([0-9a-zA-Z]{4})/
-        end
-
-        # +assert_select+ and +css_select+ call this to obtain the content in the HTML
-        # page, or from all the RJS statements, depending on the type of response.
-        def response_from_page_or_rjs()
-          content_type = @response.content_type
-
-          if content_type && Mime::JS =~ content_type
-            body = @response.body.dup
-            root = HTML::Node.new(nil)
-
-            while true
-              next if body.sub!(RJS_STATEMENTS[:any]) do |match|
-                html = unescape_rjs(match)
-                matches = HTML::Document.new(html).root.children.select { |n| n.tag? }
-                root.children.concat matches
-                ""
-              end
-              break
-            end
-
-            root
-          else
-            html_document.root
-          end
-        end
-
-        # Unescapes a RJS string.
-        def unescape_rjs(rjs_string)
-          # RJS encodes double quotes and line breaks.
-          unescaped= rjs_string.gsub('\"', '"')
-          unescaped.gsub!(/\\\//, '/')
-          unescaped.gsub!('\n', "\n")
-          unescaped.gsub!('\076', '>')
-          unescaped.gsub!('\074', '<')
-          # RJS encodes non-ascii characters.
-          unescaped.gsub!(RJS_PATTERN_UNICODE_ESCAPED_CHAR) {|u| [$1.hex].pack('U*')}
-          unescaped
+        # +assert_select+ and +css_select+ call this to obtain the content in the HTML page.
+        def response_from_page
+          html_document.root
         end
     end
   end

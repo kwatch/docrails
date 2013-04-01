@@ -1,4 +1,5 @@
 require 'abstract_unit'
+require 'set'
 
 module AbstractController
   module Testing
@@ -28,16 +29,16 @@ module AbstractController
     # Test Render mixin
     # ====
     class RenderingController < AbstractController::Base
-      include ::AbstractController::Rendering
+      include AbstractController::Rendering
 
-      def _prefix() end
+      def _prefixes
+        []
+      end
 
       def render(options = {})
         if options.is_a?(String)
           options = {:_template_name => options}
         end
-
-        options[:_prefix] = _prefix
         super
       end
 
@@ -50,7 +51,7 @@ module AbstractController
       end
 
       def index_to_string
-        self.response_body = render_to_string "index.erb"
+        self.response_body = render_to_string "index"
       end
 
       def action_with_ivars
@@ -63,11 +64,11 @@ module AbstractController
       end
 
       def rendering_to_body
-        self.response_body = render_to_body :template => "naked_render.erb"
+        self.response_body = render_to_body :template => "naked_render"
       end
 
       def rendering_to_string
-        self.response_body = render_to_string :template => "naked_render.erb"
+        self.response_body = render_to_string :template => "naked_render"
       end
     end
 
@@ -116,8 +117,8 @@ module AbstractController
         name.underscore
       end
 
-      def _prefix
-        self.class.prefix
+      def _prefixes
+        [self.class.prefix]
       end
     end
 
@@ -152,17 +153,15 @@ module AbstractController
     # ====
     # self._layout is used when defined
     class WithLayouts < PrefixedViews
-      include Layouts
+      include AbstractController::Layouts
 
       private
       def self.layout(formats)
+        find_template(name.underscore, {:formats => formats}, :_prefixes => ["layouts"])
+      rescue ActionView::MissingTemplate
         begin
-          find_template(name.underscore, {:formats => formats}, :_prefix => "layouts")
+          find_template("application", {:formats => formats}, :_prefixes => ["layouts"])
         rescue ActionView::MissingTemplate
-          begin
-            find_template("application", {:formats => formats}, :_prefix => "layouts")
-          rescue ActionView::MissingTemplate
-          end
         end
       end
 
@@ -178,16 +177,10 @@ module AbstractController
       end
     end
 
-    class Me5 < WithLayouts
-      def index
-        render
-      end
-    end
-
     class TestLayouts < ActiveSupport::TestCase
       test "layouts are included" do
         controller = Me4.new
-        result = controller.process(:index)
+        controller.process(:index)
         assert_equal "Me4 Enter : Hello from me4/index.erb : Exit", controller.response_body
       end
     end
@@ -241,12 +234,26 @@ module AbstractController
         assert_dispatch ActionMissingRespondToActionController, "success", :ohai
       end
 
-      test "a method is available as an action if respond_to_action? returns true" do
+      test "a method is available as an action if method_for_action returns true" do
         assert_dispatch RespondToActionController, "success", :index
       end
 
-      test "raises ActionNotFound if method is defined but respond_to_action? returns false" do
+      test "raises ActionNotFound if method is defined but method_for_action returns false" do
         assert_raise(ActionNotFound) { RespondToActionController.new.process(:fail) }
+      end
+    end
+
+    class Me6 < AbstractController::Base
+      self.action_methods
+
+      def index
+      end
+    end
+
+    class TestActionMethodsReloading < ActiveSupport::TestCase
+
+      test "action_methods should be reloaded after defining a new method" do
+        assert_equal Set.new(["index"]), Me6.action_methods
       end
     end
 

@@ -1,92 +1,147 @@
+require 'mutex_m'
+require 'thread_safe'
+
 module ActiveSupport
   module Notifications
-    # This is a default queue implementation that ships with Notifications. It
-    # just pushes events to all registered log subscribers.
+    # This is a default queue implementation that ships with Notifications.
+    # It just pushes events to all registered log subscribers.
+    #
+    # This class is thread safe. All methods are reentrant.
     class Fanout
+      include Mutex_m
+
       def initialize
         @subscribers = []
-        @listeners_for = {}
+        @listeners_for = ThreadSafe::Cache.new
+        super
       end
 
-      def bind(pattern)
-        Binding.new(self, pattern)
-      end
-
-      def subscribe(pattern = nil, &block)
-        @listeners_for.clear
-        @subscribers << Subscriber.new(pattern, &block)
-        @subscribers.last
+      def subscribe(pattern = nil, block = Proc.new)
+        subscriber = Subscribers.new pattern, block
+        synchronize do
+          @subscribers << subscriber
+          @listeners_for.clear
+        end
+        subscriber
       end
 
       def unsubscribe(subscriber)
-        @listeners_for.clear
-        @subscribers.reject! {|s| s.matches?(subscriber)}
+        synchronize do
+          @subscribers.reject! { |s| s.matches?(subscriber) }
+          @listeners_for.clear
+        end
+      end
+
+      def start(name, id, payload)
+        listeners_for(name).each { |s| s.start(name, id, payload) }
+      end
+
+      def finish(name, id, payload)
+        listeners_for(name).each { |s| s.finish(name, id, payload) }
       end
 
       def publish(name, *args)
-        if listeners = @listeners_for[name]
-          listeners.each { |s| s.publish(name, *args) }
-        else
-          @listeners_for[name] = @subscribers.select { |s| s.publish(name, *args) }
+        listeners_for(name).each { |s| s.publish(name, *args) }
+      end
+
+      def listeners_for(name)
+        # this is correctly done double-checked locking (ThreadSafe::Cache's lookups have volatile semantics)
+        @listeners_for[name] || synchronize do
+          # use synchronisation when accessing @subscribers
+          @listeners_for[name] ||= @subscribers.select { |s| s.subscribed_to?(name) }
         end
       end
 
-      # This is a sync queue, so there is not waiting.
+      def listening?(name)
+        listeners_for(name).any?
+      end
+
+      # This is a sync queue, so there is no waiting.
       def wait
       end
 
-      # Used for internal implementation only.
-      class Binding #:nodoc:
-        def initialize(queue, pattern)
-          @queue = queue
-          @pattern =
-            case pattern
-            when Regexp, NilClass
-              pattern
-            else
-              /^#{Regexp.escape(pattern.to_s)}$/
-            end
+      module Subscribers # :nodoc:
+        def self.new(pattern, listener)
+          if listener.respond_to?(:start) and listener.respond_to?(:finish)
+            subscriber = Evented.new pattern, listener
+          else
+            subscriber = Timed.new pattern, listener
+          end
+
+          unless pattern
+            AllMessages.new(subscriber)
+          else
+            subscriber
+          end
         end
 
-        def subscribe(&block)
-          @queue.subscribe(@pattern, &block)
-        end
-      end
+        class Evented #:nodoc:
+          def initialize(pattern, delegate)
+            @pattern = pattern
+            @delegate = delegate
+          end
 
-      class Subscriber #:nodoc:
-        def initialize(pattern, &block)
-          @pattern = pattern
-          @block = block
+          def start(name, id, payload)
+            @delegate.start name, id, payload
+          end
+
+          def finish(name, id, payload)
+            @delegate.finish name, id, payload
+          end
+
+          def subscribed_to?(name)
+            @pattern === name.to_s
+          end
+
+          def matches?(subscriber_or_name)
+            self === subscriber_or_name ||
+              @pattern && @pattern === subscriber_or_name
+          end
         end
 
-        def publish(*args)
-          return unless subscribed_to?(args.first)
-          push(*args)
-          true
+        class Timed < Evented
+          def initialize(pattern, delegate)
+            @timestack = []
+            super
+          end
+
+          def publish(name, *args)
+            @delegate.call name, *args
+          end
+
+          def start(name, id, payload)
+            @timestack.push Time.now
+          end
+
+          def finish(name, id, payload)
+            started = @timestack.pop
+            @delegate.call(name, started, Time.now, id, payload)
+          end
         end
 
-        def drained?
-          true
-        end
+        class AllMessages # :nodoc:
+          def initialize(delegate)
+            @delegate = delegate
+          end
 
-        def subscribed_to?(name)
-          !@pattern || @pattern =~ name.to_s
-        end
+          def start(name, id, payload)
+            @delegate.start name, id, payload
+          end
 
-        def matches?(subscriber_or_name)
-          case subscriber_or_name
-          when String
-            @pattern && @pattern =~ subscriber_or_name
-          when self
+          def finish(name, id, payload)
+            @delegate.finish name, id, payload
+          end
+
+          def publish(name, *args)
+            @delegate.publish name, *args
+          end
+
+          def subscribed_to?(name)
             true
           end
+
+          alias :matches? :===
         end
-
-        private
-
-          def push(*args)
-            @block.call(*args)
-          end
       end
     end
   end

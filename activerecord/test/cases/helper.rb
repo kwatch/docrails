@@ -1,25 +1,27 @@
 require File.expand_path('../../../../load_paths', __FILE__)
 
-lib = File.expand_path("#{File.dirname(__FILE__)}/../../lib")
-$:.unshift(lib) unless $:.include?('lib') || $:.include?(lib)
-
 require 'config'
 
-require 'test/unit'
+require 'active_support/testing/autorun'
 require 'stringio'
-require 'mocha'
 
 require 'active_record'
+require 'cases/test_case'
 require 'active_support/dependencies'
-require 'connection'
+require 'active_support/logger'
 
-begin
-  require 'ruby-debug'
-rescue LoadError
-end
+require 'support/config'
+require 'support/connection'
+
+# TODO: Move all these random hacks into the ARTest namespace and into the support/ dir
+
+Thread.abort_on_exception = true
 
 # Show backtraces for deprecated behavior for quicker cleanup.
 ActiveSupport::Deprecation.debug = true
+
+# Connect to the database
+ARTest.connect
 
 # Quote "type" if it's a reserved word for the current connection.
 QUOTED_TYPE = ActiveRecord::Base.connection.quote_column_name('type')
@@ -31,22 +33,36 @@ def current_adapter?(*types)
   end
 end
 
-ActiveRecord::Base.connection.class.class_eval do
-  IGNORED_SQL = [/^PRAGMA/, /^SELECT currval/, /^SELECT CAST/, /^SELECT @@IDENTITY/, /^SELECT @@ROWCOUNT/, /^SAVEPOINT/, /^ROLLBACK TO SAVEPOINT/, /^RELEASE SAVEPOINT/, /SHOW FIELDS/]
+def in_memory_db?
+  current_adapter?(:SQLite3Adapter) &&
+  ActiveRecord::Base.connection_pool.spec.config[:database] == ":memory:"
+end
 
-  def execute_with_query_record(sql, name = nil, &block)
-    $queries_executed ||= []
-    $queries_executed << sql unless IGNORED_SQL.any? { |r| sql =~ r }
-    execute_without_query_record(sql, name, &block)
-  end
+def supports_savepoints?
+  ActiveRecord::Base.connection.supports_savepoints?
+end
 
-  alias_method_chain :execute, :query_record
+def with_env_tz(new_tz = 'US/Eastern')
+  old_tz, ENV['TZ'] = ENV['TZ'], new_tz
+  yield
+ensure
+  old_tz ? ENV['TZ'] = old_tz : ENV.delete('TZ')
+end
+
+def with_active_record_default_timezone(zone)
+  old_zone, ActiveRecord::Base.default_timezone = ActiveRecord::Base.default_timezone, zone
+  yield
+ensure
+  ActiveRecord::Base.default_timezone = old_zone
 end
 
 unless ENV['FIXTURE_DEBUG']
   module ActiveRecord::TestFixtures::ClassMethods
     def try_to_load_dependency_with_silence(*args)
-      ActiveRecord::Base.logger.silence { try_to_load_dependency_without_silence(*args)}
+      old = ActiveRecord::Base.logger.level
+      ActiveRecord::Base.logger.level = ActiveSupport::Logger::ERROR
+      try_to_load_dependency_without_silence(*args)
+      ActiveRecord::Base.logger.level = old
     end
 
     alias_method_chain :try_to_load_dependency, :silence
@@ -62,16 +78,16 @@ class ActiveSupport::TestCase
   self.use_instantiated_fixtures  = false
   self.use_transactional_fixtures = true
 
-  def create_fixtures(*table_names, &block)
-    Fixtures.create_fixtures(ActiveSupport::TestCase.fixture_path, table_names, {}, &block)
+  def create_fixtures(*fixture_set_names, &block)
+    ActiveRecord::FixtureSet.create_fixtures(ActiveSupport::TestCase.fixture_path, fixture_set_names, fixture_class_names, &block)
   end
 end
 
-# silence verbose schema loading
-original_stdout = $stdout
-$stdout = StringIO.new
+def load_schema
+  # silence verbose schema loading
+  original_stdout = $stdout
+  $stdout = StringIO.new
 
-begin
   adapter_name = ActiveRecord::Base.connection.adapter_name.downcase
   adapter_specific_schema_file = SCHEMA_ROOT + "/#{adapter_name}_specific_schema.rb"
 
@@ -82,4 +98,54 @@ begin
   end
 ensure
   $stdout = original_stdout
+end
+
+load_schema
+
+class << Time
+  unless method_defined? :now_before_time_travel
+    alias_method :now_before_time_travel, :now
+  end
+
+  def now
+    (@now ||= nil) || now_before_time_travel
+  end
+
+  def travel_to(time, &block)
+    @now = time
+    block.call
+  ensure
+    @now = nil
+  end
+end
+
+module LogIntercepter
+  attr_accessor :logged, :intercepted
+  def self.extended(base)
+    base.logged = []
+  end
+  def log(sql, name, binds = [], &block)
+    if @intercepted
+      @logged << [sql, name, binds]
+      yield
+    else
+      super(sql, name,binds, &block)
+    end
+  end
+end
+
+module InTimeZone
+  private
+
+  def in_time_zone(zone)
+    old_zone  = Time.zone
+    old_tz    = ActiveRecord::Base.time_zone_aware_attributes
+
+    Time.zone = zone ? ActiveSupport::TimeZone[zone] : nil
+    ActiveRecord::Base.time_zone_aware_attributes = !zone.nil?
+    yield
+  ensure
+    Time.zone = old_zone
+    ActiveRecord::Base.time_zone_aware_attributes = old_tz
+  end
 end

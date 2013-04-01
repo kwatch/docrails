@@ -1,12 +1,8 @@
 require "cases/helper"
+require 'models/computer'
 require 'models/developer'
 require 'models/project'
 require 'models/company'
-require 'models/topic'
-require 'models/reply'
-require 'models/computer'
-require 'models/customer'
-require 'models/order'
 require 'models/categorization'
 require 'models/category'
 require 'models/post'
@@ -17,21 +13,69 @@ require 'models/tagging'
 require 'models/person'
 require 'models/reader'
 require 'models/parrot'
-require 'models/pirate'
-require 'models/treasure'
-require 'models/price_estimate'
-require 'models/club'
-require 'models/member'
-require 'models/membership'
-require 'models/sponsor'
+require 'models/ship_part'
+require 'models/ship'
+require 'models/liquid'
+require 'models/molecule'
+require 'models/electron'
 
 class AssociationsTest < ActiveRecord::TestCase
   fixtures :accounts, :companies, :developers, :projects, :developers_projects,
            :computers, :people, :readers
 
+  def test_eager_loading_should_not_change_count_of_children
+    liquid = Liquid.create(:name => 'salty')
+    molecule = liquid.molecules.create(:name => 'molecule_1')
+    molecule.electrons.create(:name => 'electron_1')
+    molecule.electrons.create(:name => 'electron_2')
+
+    liquids = Liquid.includes(:molecules => :electrons).references(:molecules).where('molecules.id is not null')
+    assert_equal 1, liquids[0].molecules.length
+  end
+
+  def test_clear_association_cache_stored
+    firm = Firm.find(1)
+    assert_kind_of Firm, firm
+
+    firm.clear_association_cache
+    assert_equal Firm.find(1).clients.collect{ |x| x.name }.sort, firm.clients.collect{ |x| x.name }.sort
+  end
+
+  def test_clear_association_cache_new_record
+     firm            = Firm.new
+     client_stored   = Client.find(3)
+     client_new      = Client.new
+     client_new.name = "The Joneses"
+     clients         = [ client_stored, client_new ]
+
+     firm.clients    << clients
+     assert_equal clients.map(&:name).to_set, firm.clients.map(&:name).to_set
+
+     firm.clear_association_cache
+     assert_equal clients.map(&:name).to_set, firm.clients.map(&:name).to_set
+  end
+
+  def test_loading_the_association_target_should_keep_child_records_marked_for_destruction
+    ship = Ship.create!(:name => "The good ship Dollypop")
+    part = ship.parts.create!(:name => "Mast")
+    part.mark_for_destruction
+    ship.parts.send(:load_target)
+    assert ship.parts[0].marked_for_destruction?
+  end
+
+  def test_loading_the_association_target_should_load_most_recent_attributes_for_child_records_marked_for_destruction
+    ship = Ship.create!(:name => "The good ship Dollypop")
+    part = ship.parts.create!(:name => "Mast")
+    part.mark_for_destruction
+    ShipPart.find(part.id).update_columns(name: 'Deck')
+    ship.parts.send(:load_target)
+    assert_equal 'Deck', ship.parts[0].name
+  end
+
+
   def test_include_with_order_works
-    assert_nothing_raised {Account.find(:first, :order => 'id', :include => :firm)}
-    assert_nothing_raised {Account.find(:first, :order => :id, :include => :firm)}
+    assert_nothing_raised {Account.all.merge!(:order => 'id', :includes => :firm).first}
+    assert_nothing_raised {Account.all.merge!(:order => :id, :includes => :firm).first}
   end
 
   def test_bad_collection_keys
@@ -42,7 +86,7 @@ class AssociationsTest < ActiveRecord::TestCase
 
   def test_should_construct_new_finder_sql_after_create
     person = Person.new :first_name => 'clark'
-    assert_equal [], person.readers.find(:all)
+    assert_equal [], person.readers.to_a
     person.save!
     reader = Reader.create! :person => person, :post => Post.new(:title => "foo", :body => "bar")
     assert person.readers.find(reader.id)
@@ -64,10 +108,20 @@ class AssociationsTest < ActiveRecord::TestCase
     assert !firm.clients(true).empty?, "New firm should have reloaded client objects"
     assert_equal 1, firm.clients(true).size, "New firm should have reloaded clients count"
   end
-  
+
+  def test_using_limitable_reflections_helper
+    using_limitable_reflections = lambda { |reflections| Tagging.all.send :using_limitable_reflections?, reflections }
+    belongs_to_reflections = [Tagging.reflect_on_association(:tag), Tagging.reflect_on_association(:super_tag)]
+    has_many_reflections = [Tag.reflect_on_association(:taggings), Developer.reflect_on_association(:projects)]
+    mixed_reflections = (belongs_to_reflections + has_many_reflections).uniq
+    assert using_limitable_reflections.call(belongs_to_reflections), "Belong to associations are limitable"
+    assert !using_limitable_reflections.call(has_many_reflections), "All has many style associations are not limitable"
+    assert !using_limitable_reflections.call(mixed_reflections), "No collection associations (has many style) should pass"
+  end
+
   def test_force_reload_is_uncached
     firm = Firm.create!("name" => "A New Firm, Inc")
-    client = Client.create!("name" => "TheClient.com", :firm => firm)
+    Client.create!("name" => "TheClient.com", :firm => firm)
     ActiveRecord::Base.cache do
       firm.clients.each {}
       assert_queries(0) { assert_not_nil firm.clients.each {} }
@@ -75,29 +129,15 @@ class AssociationsTest < ActiveRecord::TestCase
     end
   end
 
+  def test_association_with_references
+    firm = companies(:first_firm)
+    assert_equal ['foo'], firm.association_with_references.references_values
+  end
+
 end
 
 class AssociationProxyTest < ActiveRecord::TestCase
   fixtures :authors, :posts, :categorizations, :categories, :developers, :projects, :developers_projects
-
-  def test_proxy_accessors
-    welcome = posts(:welcome)
-    assert_equal  welcome, welcome.author.proxy_owner
-    assert_equal  welcome.class.reflect_on_association(:author), welcome.author.proxy_reflection
-    welcome.author.class  # force load target
-    assert_equal  welcome.author, welcome.author.proxy_target
-
-    david = authors(:david)
-    assert_equal  david, david.posts.proxy_owner
-    assert_equal  david.class.reflect_on_association(:posts), david.posts.proxy_reflection
-    david.posts.class   # force load target
-    assert_equal  david.posts, david.posts.proxy_target
-
-    assert_equal  david, david.posts_with_extension.testing_proxy_owner
-    assert_equal  david.class.reflect_on_association(:posts_with_extension), david.posts_with_extension.testing_proxy_reflection
-    david.posts_with_extension.class   # force load target
-    assert_equal  david.posts_with_extension, david.posts_with_extension.testing_proxy_target
-  end
 
   def test_push_does_not_load_target
     david = authors(:david)
@@ -132,11 +172,23 @@ class AssociationProxyTest < ActiveRecord::TestCase
     assert_equal 1, josh.posts.size
   end
 
+  def test_append_behaves_like_push
+    josh = Author.new(:name => "Josh")
+    josh.posts.append Post.new(:title => "New on Edge", :body => "More cool stuff!")
+    assert josh.posts.loaded?
+    assert_equal 1, josh.posts.size
+  end
+
+  def test_prepend_is_not_defined
+    josh = Author.new(:name => "Josh")
+    assert_raises(NoMethodError) { josh.posts.prepend Post.new }
+  end
+
   def test_save_on_parent_does_not_load_target
     david = developers(:david)
 
     assert !david.projects.loaded?
-    david.update_attribute(:created_at, Time.now)
+    david.update_columns(created_at: Time.now)
     assert !david.projects.loaded?
   end
 
@@ -163,16 +215,6 @@ class AssociationProxyTest < ActiveRecord::TestCase
     assert_equal post.body, "More cool stuff!"
   end
 
-  def test_failed_reload_returns_nil
-    p = setup_dangling_association
-    assert_nil p.author.reload
-  end
-
-  def test_failed_reset_returns_nil
-    p = setup_dangling_association
-    assert_nil p.author.reset
-  end
-
   def test_reload_returns_assocition
     david = developers(:david)
     assert_nothing_raised do
@@ -180,19 +222,20 @@ class AssociationProxyTest < ActiveRecord::TestCase
     end
   end
 
-  if RUBY_VERSION < '1.9'
-    def test_splat_does_not_invoke_to_a_on_singular_targets
-      author = posts(:welcome).author
-      author.reload.target.expects(:to_a).never
-      [*author]
-    end
+  def test_proxy_association_accessor
+    david = developers(:david)
+    assert_equal david.association(:projects), david.projects.proxy_association
   end
 
-  def setup_dangling_association
-    josh = Author.create(:name => "Josh")
-    p = Post.create(:title => "New on Edge", :body => "More cool stuff!", :author => josh)
-    josh.destroy
-    p
+  def test_scoped_allows_conditions
+    assert developers(:david).projects.merge!(where: 'foo').where_values.include?('foo')
+  end
+
+  test "getting a scope from an association" do
+    david = developers(:david)
+
+    assert david.projects.scope.is_a?(ActiveRecord::Relation)
+    assert_equal david.projects, david.projects.scope
   end
 end
 
@@ -217,17 +260,17 @@ class OverridingAssociationsTest < ActiveRecord::TestCase
 
   def test_habtm_association_redefinition_callbacks_should_differ_and_not_inherited
     # redeclared association on AR descendant should not inherit callbacks from superclass
-    callbacks = PeopleList.read_inheritable_attribute(:before_add_for_has_and_belongs_to_many)
+    callbacks = PeopleList.before_add_for_has_and_belongs_to_many
     assert_equal([:enlist], callbacks)
-    callbacks = DifferentPeopleList.read_inheritable_attribute(:before_add_for_has_and_belongs_to_many)
+    callbacks = DifferentPeopleList.before_add_for_has_and_belongs_to_many
     assert_equal([], callbacks)
   end
 
   def test_has_many_association_redefinition_callbacks_should_differ_and_not_inherited
     # redeclared association on AR descendant should not inherit callbacks from superclass
-    callbacks = PeopleList.read_inheritable_attribute(:before_add_for_has_many)
+    callbacks = PeopleList.before_add_for_has_many
     assert_equal([:enlist], callbacks)
-    callbacks = DifferentPeopleList.read_inheritable_attribute(:before_add_for_has_many)
+    callbacks = DifferentPeopleList.before_add_for_has_many
     assert_equal([], callbacks)
   end
 
@@ -257,5 +300,28 @@ class OverridingAssociationsTest < ActiveRecord::TestCase
       PeopleList.reflect_on_association(:has_one),
       DifferentPeopleList.reflect_on_association(:has_one)
     )
+  end
+
+  def test_requires_symbol_argument
+    assert_raises ArgumentError do
+      Class.new(Post) do
+        belongs_to "author"
+      end
+    end
+  end
+end
+
+class GeneratedMethodsTest < ActiveRecord::TestCase
+  fixtures :developers, :computers, :posts, :comments
+  def test_association_methods_override_attribute_methods_of_same_name
+    assert_equal(developers(:david), computers(:workstation).developer)
+    # this next line will fail if the attribute methods module is generated lazily
+    # after the association methods module is generated
+    assert_equal(developers(:david), computers(:workstation).developer)
+    assert_equal(developers(:david).id, computers(:workstation)[:developer])
+  end
+
+  def test_model_method_overrides_association_method
+    assert_equal(comments(:greetings).body, posts(:welcome).first_comment)
   end
 end

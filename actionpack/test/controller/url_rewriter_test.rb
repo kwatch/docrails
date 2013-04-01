@@ -1,7 +1,7 @@
 require 'abstract_unit'
 require 'controller/fake_controllers'
 
-class UrlRewriterTests < ActionController::TestCase
+class UrlRewriterTests < ActiveSupport::TestCase
   class Rewriter
     def initialize(request)
       @options = {
@@ -19,6 +19,11 @@ class UrlRewriterTests < ActionController::TestCase
     @request = ActionController::TestRequest.new
     @params = {}
     @rewriter = Rewriter.new(@request) #.new(@request, @params)
+    @routes = ActionDispatch::Routing::RouteSet.new.tap do |r|
+      r.draw do
+        get ':controller(/:action(/:id))'
+      end
+    end
   end
 
   def test_port
@@ -65,9 +70,9 @@ class UrlRewriterTests < ActionController::TestCase
     )
   end
 
-  def test_anchor_should_be_cgi_escaped
+  def test_anchor_should_be_uri_escaped
     assert_equal(
-      'http://test.host/c/a/i#anc%2Fhor',
+      'http://test.host/c/a/i#anc/hor',
       @rewriter.rewrite(@routes, :controller => 'c', :action => 'a', :id => 'i', :anchor => Struct.new(:to_param).new('anc/hor'))
     )
   end

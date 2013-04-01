@@ -34,6 +34,16 @@ end
 class GoodCustomer < Customer
 end
 
+class ValidatedCustomer < Customer
+  def errors
+    if name =~ /Sikachu/i
+      []
+    else
+      [{:name => "is invalid"}]
+    end
+  end
+end
+
 module Quiz
   class Question < Struct.new(:name, :id)
     extend ActiveModel::Naming
@@ -48,19 +58,17 @@ module Quiz
   end
 end
 
-class Post < Struct.new(:title, :author_name, :body, :secret, :written_on, :cost)
+class Post < Struct.new(:title, :author_name, :body, :secret, :persisted, :written_on, :cost)
   extend ActiveModel::Naming
   include ActiveModel::Conversion
   extend ActiveModel::Translation
 
   alias_method :secret?, :secret
+  alias_method :persisted?, :persisted
 
-  def persisted=(boolean)
-    @persisted = boolean
-  end
-
-  def persisted?
-    @persisted
+  def initialize(*args)
+    super
+    @persisted = false
   end
 
   attr_accessor :author
@@ -83,7 +91,7 @@ class Comment
   def to_key; id ? [id] : nil end
   def save; @id = 1; @post_id = 1 end
   def persisted?; @id.present? end
-  def to_param; @id; end
+  def to_param; @id.to_s; end
   def name
     @id.nil? ? "new #{self.class.name.downcase}" : "#{self.class.name.downcase} ##{@id}"
   end
@@ -91,6 +99,7 @@ class Comment
   attr_accessor :relevances
   def relevances_attributes=(attributes); end
 
+  attr_accessor :body
 end
 
 class Tag
@@ -129,6 +138,20 @@ class CommentRelevance
   end
 end
 
+class Sheep
+  extend ActiveModel::Naming
+  include ActiveModel::Conversion
+
+  attr_reader :id
+  def to_key; id ? [id] : nil end
+  def save; @id = 1 end
+  def new_record?; @id.nil? end
+  def name
+    @id.nil? ? 'new sheep' : "sheep ##{@id}"
+  end
+end
+
+
 class TagRelevance
   extend ActiveModel::Naming
   include ActiveModel::Conversion
@@ -148,4 +171,49 @@ end
 class Author < Comment
   attr_accessor :post
   def post_attributes=(attributes); end
+end
+
+class HashBackedAuthor < Hash
+  extend ActiveModel::Naming
+  include ActiveModel::Conversion
+
+  def persisted?; false; end
+
+  def name
+    "hash backed author"
+  end
+end
+
+module Blog
+  def self.use_relative_model_naming?
+    true
+  end
+
+  class Post < Struct.new(:title, :id)
+    extend ActiveModel::Naming
+    include ActiveModel::Conversion
+
+    def persisted?
+      id.present?
+    end
+  end
+end
+
+class ArelLike
+  def to_ary
+    true
+  end
+  def each
+    a = Array.new(2) { |id| Comment.new(id + 1) }
+    a.each { |i| yield i }
+  end
+end
+
+class RenderJsonTestException < Exception
+  def to_json(options = nil)
+    return { :error => self.class.name, :message => self.to_s }.to_json
+  end
+end
+
+class Car < Struct.new(:color)
 end

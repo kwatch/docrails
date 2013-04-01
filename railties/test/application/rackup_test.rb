@@ -1,18 +1,22 @@
 require "isolation/abstract_unit"
 
 module ApplicationTests
-  class RackupTest < Test::Unit::TestCase
+  class RackupTest < ActiveSupport::TestCase
     include ActiveSupport::Testing::Isolation
 
     def rackup
       require "rack"
-      app, options = Rack::Builder.parse_file("#{app_path}/config.ru")
+      app, _ = Rack::Builder.parse_file("#{app_path}/config.ru")
       app
     end
 
     def setup
       build_app
       boot_rails
+    end
+
+    def teardown
+      teardown_app
     end
 
     test "rails app is present" do
@@ -28,14 +32,7 @@ module ApplicationTests
 
     test "Rails.application is available after config.ru has been racked up" do
       rackup
-      assert Rails.application.is_a?(Rails::Application)
-    end
-
-    # Passenger still uses AC::Dispatcher, so we need to
-    # keep it working for now
-    test "deprecated ActionController::Dispatcher still works" do
-      rackup
-      assert ActionController::Dispatcher.new.is_a?(Rails::Application)
+      assert_kind_of Rails::Application, Rails.application
     end
 
     test "the config object is available on the application object" do

@@ -1,7 +1,12 @@
-require 'nokogiri'
+begin
+  require 'nokogiri'
+rescue LoadError => e
+  $stderr.puts "You don't have nokogiri installed in your application. Please add it to your Gemfile and run bundle install"
+  raise e
+end
 require 'active_support/core_ext/object/blank'
+require 'stringio'
 
-# = XmlMini Nokogiri implementation
 module ActiveSupport
   module XmlMini_Nokogiri #:nodoc:
     extend self
@@ -35,7 +40,7 @@ module ActiveSupport
       module Node #:nodoc:
         CONTENT_ROOT = '__content__'.freeze
 
-        # Convert XML document to hash
+        # Convert XML document to hash.
         #
         # hash::
         #   Hash to merge the converted element into.

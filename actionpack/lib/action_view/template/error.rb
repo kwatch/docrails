@@ -1,15 +1,38 @@
 require "active_support/core_ext/enumerable"
 
 module ActionView
+  # = Action View Errors
   class ActionViewError < StandardError #:nodoc:
+  end
+
+  class EncodingError < StandardError #:nodoc:
+  end
+
+  class MissingRequestError < StandardError #:nodoc:
+  end
+
+  class WrongEncodingError < EncodingError #:nodoc:
+    def initialize(string, encoding)
+      @string, @encoding = string, encoding
+    end
+
+    def message
+      @string.force_encoding(Encoding::ASCII_8BIT)
+      "Your template was not saved as valid #{@encoding}. Please " \
+      "either specify #{@encoding} as the encoding for your template " \
+      "in your text editor, or mark the template with its " \
+      "encoding by inserting the following as the first line " \
+      "of the template:\n\n# encoding: <name of correct encoding>.\n\n" \
+      "The source of your template was:\n\n#{@string}"
+    end
   end
 
   class MissingTemplate < ActionViewError #:nodoc:
     attr_reader :path
 
-    def initialize(paths, path, details, partial)
+    def initialize(paths, path, prefixes, partial, details, *)
       @path = path
-      display_paths = paths.compact.map{ |p| p.to_s.inspect }.join(", ")
+      prefixes = Array(prefixes)
       template_type = if partial
         "partial"
       elsif path =~ /layouts/i
@@ -18,29 +41,32 @@ module ActionView
         'template'
       end
 
-      super("Missing #{template_type} #{path} with #{details.inspect} in view paths #{display_paths}")
+      searched_paths = prefixes.map { |prefix| [prefix, path].join("/") }
+
+      out  = "Missing #{template_type} #{searched_paths.join(", ")} with #{details.inspect}. Searched in:\n"
+      out += paths.compact.map { |p| "  * #{p.to_s.inspect}\n" }.join
+      super out
     end
   end
 
   class Template
-    # The Template::Error exception is raised when the compilation of the template fails. This exception then gathers a
-    # bunch of intimate details and uses it to report a very precise exception message.
+    # The Template::Error exception is raised when the compilation or rendering of the template
+    # fails. This exception then gathers a bunch of intimate details and uses it to report a
+    # precise exception message.
     class Error < ActionViewError #:nodoc:
       SOURCE_CODE_RADIUS = 3
 
       attr_reader :original_exception, :backtrace
 
-      def initialize(template, assigns, original_exception)
-        @template, @assigns, @original_exception = template, assigns.dup, original_exception
+      def initialize(template, original_exception)
+        super(original_exception.message)
+        @template, @original_exception = template, original_exception
+        @sub_templates = nil
         @backtrace = original_exception.backtrace
       end
 
       def file_name
         @template.identifier
-      end
-
-      def message
-        ActiveSupport::Deprecation.silence { original_exception.message }
       end
 
       def sub_template_message
@@ -52,7 +78,7 @@ module ActionView
         end
       end
 
-      def source_extract(indentation = 0)
+      def source_extract(indentation = 0, output = :console)
         return unless num = line_number
         num = num.to_i
 
@@ -61,14 +87,10 @@ module ActionView
         start_on_line = [ num - SOURCE_CODE_RADIUS - 1, 0 ].max
         end_on_line   = [ num + SOURCE_CODE_RADIUS - 1, source_code.length].min
 
-        indent = ' ' * indentation
-        line_counter = start_on_line
+        indent = end_on_line.to_s.size + indentation
         return unless source_code = source_code[start_on_line..end_on_line]
 
-        source_code.sum do |line|
-          line_counter += 1
-          "#{indent}#{line_counter}: #{line}\n"
-        end
+        formatted_code_for(source_code, start_on_line, indent, output)
       end
 
       def sub_template_of(template_path)
@@ -96,6 +118,18 @@ module ActionView
           else
             'in '
           end + file_name
+        end
+
+        def formatted_code_for(source_code, line_counter, indent, output)
+          start_value = (output == :html) ? {} : ""
+          source_code.inject(start_value) do |result, line|
+            line_counter += 1
+            if output == :html
+              result.update(line_counter.to_s => "%#{indent}s %s\n" % ["", line])
+            else
+              result << "%#{indent}s: %s\n" % [line_counter, line]
+            end
+          end
         end
     end
   end

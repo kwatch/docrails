@@ -6,28 +6,23 @@ module ActiveRecord
       ATTRIBUTE_TYPES_CACHED_BY_DEFAULT = [:datetime, :timestamp, :time, :date]
 
       included do
-        attribute_method_suffix ""
-
-        cattr_accessor :attribute_types_cached_by_default, :instance_writer => false
+        class_attribute :attribute_types_cached_by_default, instance_writer: false
         self.attribute_types_cached_by_default = ATTRIBUTE_TYPES_CACHED_BY_DEFAULT
-
-        # Undefine id so it can be used as an attribute name
-        undef_method(:id) if method_defined?(:id)
       end
 
       module ClassMethods
-        # +cache_attributes+ allows you to declare which converted attribute values should
-        # be cached. Usually caching only pays off for attributes with expensive conversion
-        # methods, like time related columns (e.g. +created_at+, +updated_at+).
+        # +cache_attributes+ allows you to declare which converted attribute
+        # values should be cached. Usually caching only pays off for attributes
+        # with expensive conversion methods, like time related columns (e.g.
+        # +created_at+, +updated_at+).
         def cache_attributes(*attribute_names)
-          attribute_names.each {|attr| cached_attributes << attr.to_s}
+          cached_attributes.merge attribute_names.map { |attr| attr.to_s }
         end
 
         # Returns the attributes which are cached. By default time related columns
         # with datatype <tt>:datetime, :timestamp, :time, :date</tt> are cached.
         def cached_attributes
-          @cached_attributes ||=
-            columns.select{|c| attribute_types_cached_by_default.include?(c.type)}.map{|col| col.name}.to_set
+          @cached_attributes ||= columns.select { |c| cacheable_column?(c) }.map { |col| col.name }.to_set
         end
 
         # Returns +true+ if the provided attribute is being cached.
@@ -36,81 +31,77 @@ module ActiveRecord
         end
 
         protected
-          def define_method_attribute(attr_name)
-            if self.serialized_attributes[attr_name]
-              define_read_method_for_serialized_attribute(attr_name)
-            else
-              define_read_method(attr_name.to_sym, attr_name, columns_hash[attr_name])
-            end
 
-            if attr_name == primary_key && attr_name != "id"
-              define_read_method(:id, attr_name, columns_hash[attr_name])
+        # We want to generate the methods via module_eval rather than
+        # define_method, because define_method is slower on dispatch and
+        # uses more memory (because it creates a closure).
+        #
+        # But sometimes the database might return columns with
+        # characters that are not allowed in normal method names (like
+        # 'my_column(omg)'. So to work around this we first define with
+        # the __temp__ identifier, and then use alias method to rename
+        # it to what we want.
+        #
+        # We are also defining a constant to hold the frozen string of
+        # the attribute name. Using a constant means that we do not have
+        # to allocate an object on each call to the attribute method.
+        # Making it frozen means that it doesn't get duped when used to
+        # key the @attributes_cache in read_attribute.
+        def define_method_attribute(name)
+          safe_name = name.unpack('h*').first
+          generated_attribute_methods.module_eval <<-STR, __FILE__, __LINE__ + 1
+            def __temp__#{safe_name}
+              read_attribute(AttrNames::ATTR_#{safe_name}) { |n| missing_attribute(n, caller) }
             end
-          end
+            alias_method #{name.inspect}, :__temp__#{safe_name}
+            undef_method :__temp__#{safe_name}
+          STR
+        end
 
         private
-          # Define read method for serialized attribute.
-          def define_read_method_for_serialized_attribute(attr_name)
-            generated_attribute_methods.module_eval("def #{attr_name}; unserialize_attribute('#{attr_name}'); end", __FILE__, __LINE__)
-          end
 
-          # Define an attribute reader method.  Cope with nil column.
-          def define_read_method(symbol, attr_name, column)
-            cast_code = column.type_cast_code('v') if column
-            access_code = cast_code ? "(v=@attributes['#{attr_name}']) && #{cast_code}" : "@attributes['#{attr_name}']"
-
-            unless attr_name.to_s == self.primary_key.to_s
-              access_code = access_code.insert(0, "missing_attribute('#{attr_name}', caller) unless @attributes.has_key?('#{attr_name}'); ")
-            end
-
-            if cache_attribute?(attr_name)
-              access_code = "@attributes_cache['#{attr_name}'] ||= (#{access_code})"
-            end
-            generated_attribute_methods.module_eval("def #{symbol}; #{access_code}; end", __FILE__, __LINE__)
-          end
-      end
-
-      # Returns the value of the attribute identified by <tt>attr_name</tt> after it has been typecast (for example,
-      # "2004-12-12" in a data column is cast to a date object, like Date.new(2004, 12, 12)).
-      def read_attribute(attr_name)
-        attr_name = attr_name.to_s
-        attr_name = self.class.primary_key if attr_name == 'id'
-        if !(value = @attributes[attr_name]).nil?
-          if column = column_for_attribute(attr_name)
-            if unserializable_attribute?(attr_name, column)
-              unserialize_attribute(attr_name)
-            else
-              column.type_cast(value)
-            end
+        def cacheable_column?(column)
+          if attribute_types_cached_by_default == ATTRIBUTE_TYPES_CACHED_BY_DEFAULT
+            ! serialized_attributes.include? column.name
           else
-            value
+            attribute_types_cached_by_default.include?(column.type)
           end
-        else
-          nil
         end
       end
 
-      # Returns true if the attribute is of a text column and marked for serialization.
-      def unserializable_attribute?(attr_name, column)
-        column.text? && self.class.serialized_attributes[attr_name]
-      end
+      # Returns the value of the attribute identified by <tt>attr_name</tt> after
+      # it has been typecast (for example, "2004-12-12" in a data column is cast
+      # to a date object, like Date.new(2004, 12, 12)).
+      def read_attribute(attr_name)
+        # If it's cached, just return it
+        # We use #[] first as a perf optimization for non-nil values. See https://gist.github.com/jonleighton/3552829.
+        name = attr_name.to_s
+        @attributes_cache[name] || @attributes_cache.fetch(name) {
+          column = @columns_hash.fetch(name) {
+            return @attributes.fetch(name) {
+              if name == 'id' && self.class.primary_key != name
+                read_attribute(self.class.primary_key)
+              end
+            }
+          }
 
-      # Returns the unserialized object of the attribute.
-      def unserialize_attribute(attr_name)
-        unserialized_object = object_from_yaml(@attributes[attr_name])
+          value = @attributes.fetch(name) {
+            return block_given? ? yield(name) : nil
+          }
 
-        if unserialized_object.is_a?(self.class.serialized_attributes[attr_name]) || unserialized_object.nil?
-          @attributes.frozen? ? unserialized_object : @attributes[attr_name] = unserialized_object
-        else
-          raise SerializationTypeMismatch,
-            "#{attr_name} was supposed to be a #{self.class.serialized_attributes[attr_name]}, but was a #{unserialized_object.class.to_s}"
-        end
+          if self.class.cache_attribute?(name)
+            @attributes_cache[name] = column.type_cast(value)
+          else
+            column.type_cast value
+          end
+        }
       end
 
       private
-        def attribute(attribute_name)
-          read_attribute(attribute_name)
-        end
+
+      def attribute(attribute_name)
+        read_attribute(attribute_name)
+      end
     end
   end
 end

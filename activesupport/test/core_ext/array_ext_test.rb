@@ -6,11 +6,11 @@ require 'active_support/core_ext/object/conversions'
 require 'active_support/core_ext' # FIXME: pulling in all to_xml extensions
 require 'active_support/hash_with_indifferent_access'
 
-class ArrayExtAccessTests < Test::Unit::TestCase
+class ArrayExtAccessTests < ActiveSupport::TestCase
   def test_from
     assert_equal %w( a b c d ), %w( a b c d ).from(0)
     assert_equal %w( c d ), %w( a b c d ).from(2)
-    assert_nil %w( a b c d ).from(10)
+    assert_equal %w(), %w( a b c d ).from(10)
   end
 
   def test_to
@@ -18,10 +18,10 @@ class ArrayExtAccessTests < Test::Unit::TestCase
     assert_equal %w( a b c ), %w( a b c d ).to(2)
     assert_equal %w( a b c d ), %w( a b c d ).to(10)
   end
-  
+
   def test_second_through_tenth
     array = (1..42).to_a
-    
+
     assert_equal array[1], array.second
     assert_equal array[2], array.third
     assert_equal array[3], array.fourth
@@ -30,7 +30,7 @@ class ArrayExtAccessTests < Test::Unit::TestCase
   end
 end
 
-class ArrayExtToParamTests < Test::Unit::TestCase
+class ArrayExtToParamTests < ActiveSupport::TestCase
   class ToParam < String
     def to_param
       "#{self}1"
@@ -52,7 +52,7 @@ class ArrayExtToParamTests < Test::Unit::TestCase
   end
 end
 
-class ArrayExtToSentenceTests < Test::Unit::TestCase
+class ArrayExtToSentenceTests < ActiveSupport::TestCase
   def test_plain_array_to_sentence
     assert_equal "", [].to_sentence
     assert_equal "one", ['one'].to_sentence
@@ -82,12 +82,23 @@ class ArrayExtToSentenceTests < Test::Unit::TestCase
     assert_equal "one", ['one'].to_sentence
   end
 
+  def test_one_element_not_same_object
+    elements = ["one"]
+    assert_not_equal elements[0].object_id, elements.to_sentence.object_id
+  end
+
   def test_one_non_string_element
     assert_equal '1', [1].to_sentence
   end
+
+  def test_does_not_modify_given_hash
+    options = { words_connector: ' ' }
+    assert_equal "one two, and three", ['one', 'two', 'three'].to_sentence(options)
+    assert_equal({ words_connector: ' ' }, options)
+  end
 end
 
-class ArrayExtToSTests < Test::Unit::TestCase
+class ArrayExtToSTests < ActiveSupport::TestCase
   def test_to_s_db
     collection = [
       Class.new { def id() 1 end }.new,
@@ -100,7 +111,15 @@ class ArrayExtToSTests < Test::Unit::TestCase
   end
 end
 
-class ArrayExtGroupingTests < Test::Unit::TestCase
+class ArrayExtGroupingTests < ActiveSupport::TestCase
+  def setup
+    Fixnum.send :private, :/  # test we avoid Integer#/ (redefined by mathn)
+  end
+
+  def teardown
+    Fixnum.send :public, :/
+  end
+
   def test_in_groups_of_with_perfect_fit
     groups = []
     ('a'..'i').to_a.in_groups_of(3) do |group|
@@ -183,7 +202,7 @@ class ArrayExtGroupingTests < Test::Unit::TestCase
   end
 end
 
-class ArraySplitTests < Test::Unit::TestCase
+class ArraySplitTests < ActiveSupport::TestCase
   def test_split_with_empty_array
     assert_equal [[]], [].split(0)
   end
@@ -204,7 +223,7 @@ class ArraySplitTests < Test::Unit::TestCase
   end
 end
 
-class ArrayToXmlTests < Test::Unit::TestCase
+class ArrayToXmlTests < ActiveSupport::TestCase
   def test_to_xml
     xml = [
       { :name => "David", :age => 26, :age_in_millis => 820497600000 },
@@ -294,7 +313,7 @@ class ArrayToXmlTests < Test::Unit::TestCase
   end
 end
 
-class ArrayExtractOptionsTests < Test::Unit::TestCase
+class ArrayExtractOptionsTests < ActiveSupport::TestCase
   class HashSubclass < Hash
   end
 
@@ -319,7 +338,7 @@ class ArrayExtractOptionsTests < Test::Unit::TestCase
     assert_equal({}, options)
     assert_equal [hash], array
   end
-  
+
   def test_extract_options_extracts_extractable_subclass
     hash = ExtractableHashSubclass.new
     hash[:foo] = 1
@@ -336,45 +355,37 @@ class ArrayExtractOptionsTests < Test::Unit::TestCase
   end
 end
 
-class ArrayUniqByTests < Test::Unit::TestCase
+class ArrayUniqByTests < ActiveSupport::TestCase
   def test_uniq_by
-    assert_equal [1,2], [1,2,3,4].uniq_by { |i| i.odd? }
-    assert_equal [1,2], [1,2,3,4].uniq_by(&:even?)
-    assert_equal((-5..0).to_a, (-5..5).to_a.uniq_by{ |i| i**2 })
+    ActiveSupport::Deprecation.silence do
+      assert_equal [1,2], [1,2,3,4].uniq_by { |i| i.odd? }
+      assert_equal [1,2], [1,2,3,4].uniq_by(&:even?)
+      assert_equal((-5..0).to_a, (-5..5).to_a.uniq_by{ |i| i**2 })
+    end
   end
 
   def test_uniq_by!
     a = [1,2,3,4]
-    a.uniq_by! { |i| i.odd? }
+    ActiveSupport::Deprecation.silence do
+      a.uniq_by! { |i| i.odd? }
+    end
     assert_equal [1,2], a
 
     a = [1,2,3,4]
-    a.uniq_by! { |i| i.even? }
+    ActiveSupport::Deprecation.silence do
+      a.uniq_by! { |i| i.even? }
+    end
     assert_equal [1,2], a
 
     a = (-5..5).to_a
-    a.uniq_by! { |i| i**2 }
+    ActiveSupport::Deprecation.silence do
+      a.uniq_by! { |i| i**2 }
+    end
     assert_equal((-5..0).to_a, a)
   end
 end
 
-class ArrayExtRandomTests < ActiveSupport::TestCase
-  def test_random_element_from_array
-    assert_nil [].random_element
-
-    Kernel.expects(:rand).with(1).returns(0)
-    assert_equal 'x', ['x'].random_element
-
-    Kernel.expects(:rand).with(3).returns(1)
-    assert_equal 2, [1, 2, 3].random_element
-  end
-
-  def test_deprecated_rand_on_array
-    assert_deprecated { [].rand }
-  end
-end
-
-class ArrayWrapperTests < Test::Unit::TestCase
+class ArrayWrapperTests < ActiveSupport::TestCase
   class FakeCollection
     def to_ary
       ["foo", "bar"]
@@ -384,6 +395,18 @@ class ArrayWrapperTests < Test::Unit::TestCase
   class Proxy
     def initialize(target) @target = target end
     def method_missing(*a) @target.send(*a) end
+  end
+
+  class DoubtfulToAry
+    def to_ary
+      :not_an_array
+    end
+  end
+
+  class NilToAry
+    def to_ary
+      nil
+    end
   end
 
   def test_array
@@ -425,5 +448,24 @@ class ArrayWrapperTests < Test::Unit::TestCase
   def test_struct
     o = Struct.new(:foo).new(123)
     assert_equal [o], Array.wrap(o)
+  end
+
+  def test_wrap_returns_wrapped_if_to_ary_returns_nil
+    o = NilToAry.new
+    assert_equal [o], Array.wrap(o)
+  end
+
+  def test_wrap_does_not_complain_if_to_ary_does_not_return_an_array
+    assert_equal DoubtfulToAry.new.to_ary, Array.wrap(DoubtfulToAry.new)
+  end
+end
+
+class ArrayPrependAppendTest < ActiveSupport::TestCase
+  def test_append
+    assert_equal [1, 2], [1].append(2)
+  end
+
+  def test_prepend
+    assert_equal [2, 1], [1].prepend(2)
   end
 end

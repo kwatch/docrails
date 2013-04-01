@@ -1,5 +1,5 @@
 #--
-# Copyright (c) 2004-2010 David Heinemeier Hansson
+# Copyright (c) 2004-2013 David Heinemeier Hansson
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -21,46 +21,73 @@
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #++
 
-activesupport_path = File.expand_path('../../../activesupport/lib', __FILE__)
-$:.unshift(activesupport_path) if File.directory?(activesupport_path) && !$:.include?(activesupport_path)
-require 'active_support/ruby/shim'
-require 'active_support/core_ext/class/attribute_accessors'
-
+require 'active_support'
+require 'active_support/rails'
 require 'action_pack'
 
 module ActionView
   extend ActiveSupport::Autoload
 
   eager_autoload do
+    autoload :Base
     autoload :Context
-    autoload :Template
+    autoload :CompiledTemplates, "action_view/context"
+    autoload :Digestor
     autoload :Helpers
+    autoload :LookupContext
+    autoload :PathSet
+    autoload :RecordIdentifier
+    autoload :RoutingUrlFor
+    autoload :Template
 
-    autoload_under "render" do
-      autoload :Layouts
-      autoload :Partials
-      autoload :Rendering
+    autoload_under "renderer" do
+      autoload :Renderer
+      autoload :AbstractRenderer
+      autoload :PartialRenderer
+      autoload :TemplateRenderer
+      autoload :StreamingTemplateRenderer
     end
 
-    autoload :Base
-    autoload :LookupContext
-    autoload :Resolver,           'action_view/template/resolver'
-    autoload :PathResolver,       'action_view/template/resolver'
-    autoload :FileSystemResolver, 'action_view/template/resolver'
-    autoload :PathSet,            'action_view/paths'
+    autoload_at "action_view/template/resolver" do
+      autoload :Resolver
+      autoload :PathResolver
+      autoload :FileSystemResolver
+      autoload :OptimizedFileSystemResolver
+      autoload :FallbackFileSystemResolver
+    end
 
-    autoload :MissingTemplate,    'action_view/template/error'
-    autoload :ActionViewError,    'action_view/template/error'
-    autoload :TemplateError,     'action_view/template/error'
+    autoload_at "action_view/buffers" do
+      autoload :OutputBuffer
+      autoload :StreamingBuffer
+    end
 
-    autoload :TemplateHandler,   'action_view/template'
-    autoload :TemplateHandlers,  'action_view/template'
+    autoload_at "action_view/flows" do
+      autoload :OutputFlow
+      autoload :StreamingFlow
+    end
+
+    autoload_at "action_view/template/error" do
+      autoload :MissingTemplate
+      autoload :ActionViewError
+      autoload :EncodingError
+      autoload :MissingRequestError
+      autoload :TemplateError
+      autoload :WrongEncodingError
+    end
   end
 
-  autoload :TestCase, 'action_view/test_case'
+  autoload :TestCase
+
+  ENCODING_FLAG = '#.*coding[:=]\s*(\S+)[ \t]*'
+
+  def self.eager_load!
+    super
+    ActionView::Template.eager_load!
+  end
 end
 
-require 'active_support/i18n'
 require 'active_support/core_ext/string/output_safety'
 
-I18n.load_path << "#{File.dirname(__FILE__)}/action_view/locale/en.yml"
+ActiveSupport.on_load(:i18n) do
+  I18n.load_path << "#{File.dirname(__FILE__)}/action_view/locale/en.yml"
+end

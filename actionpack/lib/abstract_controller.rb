@@ -1,11 +1,6 @@
-activesupport_path = File.expand_path('../../../activesupport/lib', __FILE__)
-$:.unshift(activesupport_path) if File.directory?(activesupport_path) && !$:.include?(activesupport_path)
-
-require 'active_support/ruby/shim'
-require 'active_support/dependencies/autoload'
-require 'active_support/core_ext/class/attribute'
+require 'action_pack'
+require 'active_support/rails'
 require 'active_support/core_ext/module/attr_internal'
-require 'active_support/core_ext/module/delegation'
 require 'active_support/core_ext/module/anonymous'
 require 'active_support/i18n'
 
@@ -20,5 +15,7 @@ module AbstractController
   autoload :Logger
   autoload :Rendering
   autoload :Translation
+  autoload :AssetPaths
   autoload :ViewPaths
+  autoload :UrlFor
 end

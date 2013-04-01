@@ -5,6 +5,13 @@ class SanitizerTest < ActionController::TestCase
     @sanitizer = nil # used by assert_sanitizer
   end
 
+  def test_strip_tags_with_quote
+    sanitizer = HTML::FullSanitizer.new
+    string    = '<" <img src="trollface.gif" onload="alert(1)"> hi'
+
+    assert_equal ' hi', sanitizer.sanitize(string)
+  end
+
   def test_strip_tags
     sanitizer = HTML::FullSanitizer.new
     assert_equal("<<<bad html", sanitizer.sanitize("<<<bad html"))
@@ -20,15 +27,16 @@ class SanitizerTest < ActionController::TestCase
     assert_equal "This has a  here.", sanitizer.sanitize("This has a <![CDATA[<section>]]> here.")
     assert_equal "This has an unclosed ", sanitizer.sanitize("This has an unclosed <![CDATA[<section>]] here...")
     [nil, '', '   '].each { |blank| assert_equal blank, sanitizer.sanitize(blank) }
+    assert_nothing_raised { sanitizer.sanitize("This is a frozen string with no tags".freeze) }
   end
 
   def test_strip_links
     sanitizer = HTML::LinkSanitizer.new
-    assert_equal "Dont touch me", sanitizer.sanitize("Dont touch me")    
+    assert_equal "Dont touch me", sanitizer.sanitize("Dont touch me")
     assert_equal "on my mind\nall day long", sanitizer.sanitize("<a href='almost'>on my mind</a>\n<A href='almost'>all day long</A>")
-    assert_equal "0wn3d", sanitizer.sanitize("<a href='http://www.rubyonrails.com/'><a href='http://www.rubyonrails.com/' onlclick='steal()'>0wn3d</a></a>") 
-    assert_equal "Magic", sanitizer.sanitize("<a href='http://www.rubyonrails.com/'>Mag<a href='http://www.ruby-lang.org/'>ic") 
-    assert_equal "FrrFox", sanitizer.sanitize("<href onlclick='steal()'>FrrFox</a></href>") 
+    assert_equal "0wn3d", sanitizer.sanitize("<a href='http://www.rubyonrails.com/'><a href='http://www.rubyonrails.com/' onlclick='steal()'>0wn3d</a></a>")
+    assert_equal "Magic", sanitizer.sanitize("<a href='http://www.rubyonrails.com/'>Mag<a href='http://www.ruby-lang.org/'>ic")
+    assert_equal "FrrFox", sanitizer.sanitize("<href onlclick='steal()'>FrrFox</a></href>")
     assert_equal "My mind\nall <b>day</b> long", sanitizer.sanitize("<a href='almost'>My mind</a>\n<A href='almost'>all <b>day</b> long</A>")
     assert_equal "all <b>day</b> long", sanitizer.sanitize("<<a>a href='hello'>all <b>day</b> long<</A>/a>")
 
@@ -48,7 +56,6 @@ class SanitizerTest < ActionController::TestCase
     assert_sanitized "a b c<script language=\"Javascript\">blah blah blah</script>d e f", "a b cd e f"
   end
 
-  # TODO: Clean up
   def test_sanitize_js_handlers
     raw = %{onthis="do that" <a href="#" onclick="hello" name="foo" onbogus="remove me">hello</a>}
     assert_sanitized raw, %{onthis="do that" <a name="foo" href="#">hello</a>}
@@ -58,7 +65,7 @@ class SanitizerTest < ActionController::TestCase
     raw = %{href="javascript:bang" <a href="javascript:bang" name="hello">foo</a>, <span href="javascript:bang">bar</span>}
     assert_sanitized raw, %{href="javascript:bang" <a name="hello">foo</a>, <span>bar</span>}
   end
-  
+
   def test_sanitize_image_src
     raw = %{src="javascript:bang" <img src="javascript:bang" width="5">foo</img>, <span src="javascript:bang">bar</span>}
     assert_sanitized raw, %{src="javascript:bang" <img width="5">foo</img>, <span>bar</span>}
@@ -118,6 +125,24 @@ class SanitizerTest < ActionController::TestCase
     assert_equal(text, sanitizer.sanitize(text, :attributes => ['foo']))
   end
 
+  def test_should_raise_argument_error_if_tags_is_not_enumerable
+    sanitizer = HTML::WhiteListSanitizer.new
+    e = assert_raise(ArgumentError) do
+      sanitizer.sanitize('', :tags => 'foo')
+    end
+
+    assert_equal "You should pass :tags as an Enumerable", e.message
+  end
+
+  def test_should_raise_argument_error_if_attributes_is_not_enumerable
+    sanitizer = HTML::WhiteListSanitizer.new
+    e = assert_raise(ArgumentError) do
+      sanitizer.sanitize('', :attributes => 'foo')
+    end
+
+    assert_equal "You should pass :attributes as an Enumerable", e.message
+  end
+
   [%w(img src), %w(a href)].each do |(tag, attr)|
     define_method "test_should_strip_#{attr}_attribute_in_#{tag}_with_bad_protocols" do
       assert_sanitized %(<#{tag} #{attr}="javascript:bang" title="1">boo</#{tag}>), %(<#{tag} title="1">boo</#{tag}>)
@@ -128,6 +153,20 @@ class SanitizerTest < ActionController::TestCase
     sanitizer = HTML::WhiteListSanitizer.new
     %w(about chrome data disk hcp help javascript livescript lynxcgi lynxexec ms-help ms-its mhtml mocha opera res resource shell vbscript view-source vnd.ms.radio wysiwyg).each do |proto|
       assert sanitizer.send(:contains_bad_protocols?, 'src', "#{proto}://bad")
+    end
+  end
+
+  def test_should_accept_good_protocols_ignoring_case
+    sanitizer = HTML::WhiteListSanitizer.new
+    HTML::WhiteListSanitizer.allowed_protocols.each do |proto|
+      assert !sanitizer.send(:contains_bad_protocols?, 'src', "#{proto.capitalize}://good")
+    end
+  end
+
+  def test_should_accept_good_protocols_ignoring_space
+    sanitizer = HTML::WhiteListSanitizer.new
+    HTML::WhiteListSanitizer.allowed_protocols.each do |proto|
+      assert !sanitizer.send(:contains_bad_protocols?, 'src', " #{proto}://good")
     end
   end
 
@@ -147,9 +186,9 @@ class SanitizerTest < ActionController::TestCase
     assert_sanitized %(<SCRIPT\nSRC=http://ha.ckers.org/xss.js></SCRIPT>), ""
   end
 
-  [%(<IMG SRC="javascript:alert('XSS');">), 
-   %(<IMG SRC=javascript:alert('XSS')>), 
-   %(<IMG SRC=JaVaScRiPt:alert('XSS')>), 
+  [%(<IMG SRC="javascript:alert('XSS');">),
+   %(<IMG SRC=javascript:alert('XSS')>),
+   %(<IMG SRC=JaVaScRiPt:alert('XSS')>),
    %(<IMG """><SCRIPT>alert("XSS")</SCRIPT>">),
    %(<IMG SRC=javascript:alert(&quot;XSS&quot;)>),
    %(<IMG SRC=javascript:alert(String.fromCharCode(88,83,83))>),
@@ -166,36 +205,35 @@ class SanitizerTest < ActionController::TestCase
       assert_sanitized img_hack, "<img>"
     end
   end
-  
+
   def test_should_sanitize_tag_broken_up_by_null
     assert_sanitized %(<SCR\0IPT>alert(\"XSS\")</SCR\0IPT>), "alert(\"XSS\")"
   end
-  
+
   def test_should_sanitize_invalid_script_tag
     assert_sanitized %(<SCRIPT/XSS SRC="http://ha.ckers.org/xss.js"></SCRIPT>), ""
   end
-  
+
   def test_should_sanitize_script_tag_with_multiple_open_brackets
     assert_sanitized %(<<SCRIPT>alert("XSS");//<</SCRIPT>), "&lt;"
     assert_sanitized %(<iframe src=http://ha.ckers.org/scriptlet.html\n<a), %(&lt;a)
   end
-  
+
   def test_should_sanitize_unclosed_script
     assert_sanitized %(<SCRIPT SRC=http://ha.ckers.org/xss.js?<B>), "<b>"
   end
-  
+
   def test_should_sanitize_half_open_scripts
     assert_sanitized %(<IMG SRC="javascript:alert('XSS')"), "<img>"
   end
-  
+
   def test_should_not_fall_for_ridiculous_hack
     img_hack = %(<IMG\nSRC\n=\n"\nj\na\nv\na\ns\nc\nr\ni\np\nt\n:\na\nl\ne\nr\nt\n(\n'\nX\nS\nS\n'\n)\n"\n>)
     assert_sanitized img_hack, "<img>"
   end
 
-  # TODO: Clean up
   def test_should_sanitize_attributes
-    assert_sanitized %(<SPAN title="'><script>alert()</script>">blah</SPAN>), %(<span title="'&gt;&lt;script&gt;alert()&lt;/script&gt;">blah</span>)
+    assert_sanitized %(<SPAN title="'><script>alert()</script>">blah</SPAN>), %(<span title="#{CGI.escapeHTML "'><script>alert()</script>"}">blah</span>)
   end
 
   def test_should_sanitize_illegal_style_properties
@@ -214,15 +252,15 @@ class SanitizerTest < ActionController::TestCase
     raw = %(-moz-binding:url('http://ha.ckers.org/xssmoz.xml#xss'))
     assert_equal '', sanitize_css(raw)
   end
-  
+
   def test_should_sanitize_invalid_tag_names
     assert_sanitized(%(a b c<script/XSS src="http://ha.ckers.org/xss.js"></script>d e f), "a b cd e f")
   end
-  
+
   def test_should_sanitize_non_alpha_and_non_digit_characters_in_tags
     assert_sanitized('<a onclick!#$%&()*~+-_.,:;?@[/|\]^`=alert("XSS")>foo</a>', "<a>foo</a>")
   end
-  
+
   def test_should_sanitize_invalid_tag_names_in_single_tags
     assert_sanitized('<img/src="http://ha.ckers.org/xss.js"/>', "<img />")
   end
@@ -255,6 +293,10 @@ class SanitizerTest < ActionController::TestCase
 
   def test_should_not_mangle_urls_with_ampersand
      assert_sanitized %{<a href=\"http://www.domain.com?var1=1&amp;var2=2\">my link</a>}
+  end
+
+  def test_should_sanitize_neverending_attribute
+    assert_sanitized "<span class=\"\\", "<span class=\"\\\">"
   end
 
 protected
