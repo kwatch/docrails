@@ -1,14 +1,16 @@
 # encoding: utf-8
 require 'abstract_unit'
 require 'multibyte_test_helpers'
+require 'active_support/core_ext/string/multibyte'
 
 class String
   def __method_for_multibyte_testing_with_integer_result; 1; end
   def __method_for_multibyte_testing; 'result'; end
   def __method_for_multibyte_testing!; 'result'; end
+  def __method_for_multibyte_testing_that_returns_nil!; end
 end
 
-class MultibyteCharsTest < Test::Unit::TestCase
+class MultibyteCharsTest < ActiveSupport::TestCase
   include MultibyteTestHelpers
 
   def setup
@@ -31,17 +33,24 @@ class MultibyteCharsTest < Test::Unit::TestCase
   end
 
   def test_forwarded_method_calls_should_return_new_chars_instance
-    assert @chars.__method_for_multibyte_testing.kind_of?(@proxy_class)
+    assert_kind_of @proxy_class, @chars.__method_for_multibyte_testing
     assert_not_equal @chars.object_id, @chars.__method_for_multibyte_testing.object_id
   end
 
-  def test_forwarded_bang_method_calls_should_return_the_original_chars_instance
-    assert @chars.__method_for_multibyte_testing!.kind_of?(@proxy_class)
+  def test_forwarded_bang_method_calls_should_return_the_original_chars_instance_when_result_is_not_nil
+    assert_kind_of @proxy_class, @chars.__method_for_multibyte_testing!
     assert_equal @chars.object_id, @chars.__method_for_multibyte_testing!.object_id
   end
 
+  def test_forwarded_bang_method_calls_should_return_nil_when_result_is_nil
+    assert_nil @chars.__method_for_multibyte_testing_that_returns_nil!
+  end
+
   def test_methods_are_forwarded_to_wrapped_string_for_byte_strings
-    assert_equal BYTE_STRING.class, BYTE_STRING.mb_chars.class
+    original_encoding = BYTE_STRING.encoding
+    assert_equal BYTE_STRING.length, BYTE_STRING.mb_chars.length
+  ensure
+    BYTE_STRING.force_encoding(original_encoding)
   end
 
   def test_forwarded_method_with_non_string_result_should_be_returned_vertabim
@@ -49,13 +58,15 @@ class MultibyteCharsTest < Test::Unit::TestCase
   end
 
   def test_should_concatenate
-    assert_equal 'ab', 'a'.mb_chars + 'b'
-    assert_equal 'ab', 'a' + 'b'.mb_chars
-    assert_equal 'ab', 'a'.mb_chars + 'b'.mb_chars
+    mb_a = 'a'.mb_chars
+    mb_b = 'b'.mb_chars
+    assert_equal 'ab', mb_a + 'b'
+    assert_equal 'ab', 'a' + mb_b
+    assert_equal 'ab', mb_a + mb_b
 
-    assert_equal 'ab', 'a'.mb_chars << 'b'
-    assert_equal 'ab', 'a' << 'b'.mb_chars
-    assert_equal 'ab', 'a'.mb_chars << 'b'.mb_chars
+    assert_equal 'ab', mb_a << 'b'
+    assert_equal 'ab', 'a' << mb_b
+    assert_equal 'abb', mb_a << mb_b
   end
 
   def test_consumes_utf8_strings
@@ -64,98 +75,78 @@ class MultibyteCharsTest < Test::Unit::TestCase
     assert !@proxy_class.consumes?(BYTE_STRING)
   end
 
-  def test_unpack_utf8_strings
-    assert_equal 4, @proxy_class.u_unpack(UNICODE_STRING).length
-    assert_equal 5, @proxy_class.u_unpack(ASCII_STRING).length
+  def test_concatenation_should_return_a_proxy_class_instance
+    assert_equal ActiveSupport::Multibyte.proxy_class, ('a'.mb_chars + 'b').class
+    assert_equal ActiveSupport::Multibyte.proxy_class, ('a'.mb_chars << 'b').class
   end
 
-  def test_unpack_raises_encoding_error_on_broken_strings
-    assert_raise(ActiveSupport::Multibyte::EncodingError) do
-      @proxy_class.u_unpack(BYTE_STRING)
-    end
+  def test_ascii_strings_are_treated_at_utf8_strings
+    assert_equal ActiveSupport::Multibyte.proxy_class, ASCII_STRING.mb_chars.class
   end
 
-  if RUBY_VERSION < '1.9'
-    def test_concatenation_should_return_a_proxy_class_instance
-      assert_equal ActiveSupport::Multibyte.proxy_class, ('a'.mb_chars + 'b').class
-      assert_equal ActiveSupport::Multibyte.proxy_class, ('a'.mb_chars << 'b').class
-    end
+  def test_concatenate_should_return_proxy_instance
+    assert(('a'.mb_chars + 'b').kind_of?(@proxy_class))
+    assert(('a'.mb_chars + 'b'.mb_chars).kind_of?(@proxy_class))
+    assert(('a'.mb_chars << 'b').kind_of?(@proxy_class))
+    assert(('a'.mb_chars << 'b'.mb_chars).kind_of?(@proxy_class))
+  end
 
-    def test_ascii_strings_are_treated_at_utf8_strings
-      assert_equal ActiveSupport::Multibyte.proxy_class, ASCII_STRING.mb_chars.class
-    end
-
-    def test_concatenate_should_return_proxy_instance
-      assert(('a'.mb_chars + 'b').kind_of?(@proxy_class))
-      assert(('a'.mb_chars + 'b'.mb_chars).kind_of?(@proxy_class))
-      assert(('a'.mb_chars << 'b').kind_of?(@proxy_class))
-      assert(('a'.mb_chars << 'b'.mb_chars).kind_of?(@proxy_class))
-    end
+  def test_should_return_string_as_json
+    assert_equal UNICODE_STRING, @chars.as_json
   end
 end
 
-class MultibyteCharsUTF8BehaviourTest < Test::Unit::TestCase
+class MultibyteCharsUTF8BehaviourTest < ActiveSupport::TestCase
   include MultibyteTestHelpers
 
   def setup
     @chars = UNICODE_STRING.dup.mb_chars
-
-    if RUBY_VERSION < '1.9'
-      # Multibyte support all kinds of whitespace (ie. NEWLINE, SPACE, EM SPACE)
-      @whitespace = "\n\t#{[32, 8195].pack('U*')}"
-    else
-      # Ruby 1.9 only supports basic whitespace
-      @whitespace = "\n\t "
-    end
-
+    # Ruby 1.9 only supports basic whitespace
+    @whitespace = "\n\t "
     @byte_order_mark = [65279].pack('U')
   end
 
-  if RUBY_VERSION < '1.9'
-    def test_split_should_return_an_array_of_chars_instances
-      @chars.split(//).each do |character|
-        assert character.kind_of?(ActiveSupport::Multibyte.proxy_class)
-      end
-    end
-
-    def test_indexed_insert_accepts_fixnums
-      @chars[2] = 32
-      assert_equal 'こに わ', @chars
-    end
-
-    def test_overridden_bang_methods_return_self
-      [:rstrip!, :lstrip!, :strip!, :reverse!, :upcase!, :downcase!, :capitalize!].each do |method|
-        assert_equal @chars.object_id, @chars.send(method).object_id
-      end
-    end
-
-    def test_overridden_bang_methods_change_wrapped_string
-      [:rstrip!, :lstrip!, :strip!, :reverse!, :upcase!, :downcase!].each do |method|
-        original = ' Café '
-        proxy = chars(original.dup)
-        proxy.send(method)
-        assert_not_equal original, proxy.to_s
-      end
-      proxy = chars('òu')
-      proxy.capitalize!
-      assert_equal 'Òu', proxy.to_s
+  def test_split_should_return_an_array_of_chars_instances
+    @chars.split(//).each do |character|
+      assert_kind_of ActiveSupport::Multibyte.proxy_class, character
     end
   end
 
-  if RUBY_VERSION >= '1.9'
-    def test_unicode_string_should_have_utf8_encoding
-      assert_equal Encoding::UTF_8, UNICODE_STRING.encoding
-    end
+  %w{capitalize downcase lstrip reverse rstrip swapcase upcase}.each do |method|
+    class_eval(<<-EOTESTS, __FILE__, __LINE__ + 1)
+      def test_#{method}_bang_should_return_self_when_modifying_wrapped_string
+        chars = ' él piDió Un bUen café '
+        assert_equal chars.object_id, chars.send("#{method}!").object_id
+      end
+
+      def test_#{method}_bang_should_change_wrapped_string
+        original = ' él piDió Un bUen café '
+        proxy = chars(original.dup)
+        proxy.send("#{method}!")
+        assert_not_equal original, proxy.to_s
+      end
+    EOTESTS
+  end
+
+  def test_tidy_bytes_bang_should_return_self
+    assert_equal @chars.object_id, @chars.tidy_bytes!.object_id
+  end
+
+  def test_tidy_bytes_bang_should_change_wrapped_string
+    original = " Un bUen café \x92"
+    proxy = chars(original.dup)
+    proxy.tidy_bytes!
+    assert_not_equal original, proxy.to_s
+  end
+
+  def test_unicode_string_should_have_utf8_encoding
+    assert_equal Encoding::UTF_8, UNICODE_STRING.encoding
   end
 
   def test_identity
     assert_equal @chars, @chars
     assert @chars.eql?(@chars)
-    if RUBY_VERSION <= '1.9'
-      assert !@chars.eql?(UNICODE_STRING)
-    else
-      assert @chars.eql?(UNICODE_STRING)
-    end
+    assert !@chars.eql?(UNICODE_STRING)
   end
 
   def test_string_methods_are_chainable
@@ -176,6 +167,7 @@ class MultibyteCharsUTF8BehaviourTest < Test::Unit::TestCase
     assert chars('').decompose.kind_of?(ActiveSupport::Multibyte.proxy_class)
     assert chars('').compose.kind_of?(ActiveSupport::Multibyte.proxy_class)
     assert chars('').tidy_bytes.kind_of?(ActiveSupport::Multibyte.proxy_class)
+    assert chars('').swapcase.kind_of?(ActiveSupport::Multibyte.proxy_class)
   end
 
   def test_should_be_equal_to_the_wrapped_string
@@ -207,7 +199,7 @@ class MultibyteCharsUTF8BehaviourTest < Test::Unit::TestCase
     assert_equal 'こわにちわ', @chars.insert(1, 'わ')
     assert_equal 'こわわわにちわ', @chars.insert(2, 'わわ')
     assert_equal 'わこわわわにちわ', @chars.insert(0, 'わ')
-    assert_equal 'わこわわわにちわ', @chars.wrapped_string if RUBY_VERSION < '1.9'
+    assert_equal 'わこわわわにちわ', @chars.wrapped_string
   end
 
   def test_insert_should_be_destructive
@@ -231,7 +223,7 @@ class MultibyteCharsUTF8BehaviourTest < Test::Unit::TestCase
   def test_include_raises_when_nil_is_passed
     @chars.include?(nil)
     flunk "Expected chars.include?(nil) to raise TypeError or NoMethodError"
-  rescue Exception => e
+  rescue Exception
   end
 
   def test_index_should_return_character_offset
@@ -330,7 +322,7 @@ class MultibyteCharsUTF8BehaviourTest < Test::Unit::TestCase
     assert_raise(ArgumentError) { @chars.center }
   end
 
-  def test_center_should_count_charactes_instead_of_bytes
+  def test_center_should_count_characters_instead_of_bytes
     assert_equal UNICODE_STRING, @chars.center(-3)
     assert_equal UNICODE_STRING, @chars.center(0)
     assert_equal UNICODE_STRING, @chars.center(4)
@@ -402,6 +394,7 @@ class MultibyteCharsUTF8BehaviourTest < Test::Unit::TestCase
     assert_equal 'こ', @chars.slice(0)
     assert_equal 'わ', @chars.slice(3)
     assert_equal nil, ''.mb_chars.slice(-1..1)
+    assert_equal nil, ''.mb_chars.slice(-1, 1)
     assert_equal '', ''.mb_chars.slice(0..10)
     assert_equal 'にちわ', @chars.slice(1..3)
     assert_equal 'にちわ', @chars.slice(1, 3)
@@ -421,8 +414,9 @@ class MultibyteCharsUTF8BehaviourTest < Test::Unit::TestCase
   end
 
   def test_slice_bang_removes_the_slice_from_the_receiver
-    @chars.slice!(1..2)
-    assert_equal 'こわ', @chars
+    chars = 'úüù'.mb_chars
+    chars.slice!(0,2)
+    assert_equal 'ù', chars
   end
 
   def test_slice_should_throw_exceptions_on_invalid_arguments
@@ -445,9 +439,19 @@ class MultibyteCharsUTF8BehaviourTest < Test::Unit::TestCase
     assert_equal 'abc', 'aBc'.mb_chars.downcase
   end
 
+  def test_swapcase_should_swap_ascii_characters
+    assert_equal '', ''.mb_chars.swapcase
+    assert_equal 'AbC', 'aBc'.mb_chars.swapcase
+  end
+
   def test_capitalize_should_work_on_ascii_characters
     assert_equal '', ''.mb_chars.capitalize
     assert_equal 'Abc', 'abc'.mb_chars.capitalize
+  end
+
+  def test_titleize_should_work_on_ascii_characters
+    assert_equal '', ''.mb_chars.titleize
+    assert_equal 'Abc Abc', 'abc abc'.mb_chars.titleize
   end
 
   def test_respond_to_knows_which_methods_the_proxy_responds_to
@@ -455,6 +459,15 @@ class MultibyteCharsUTF8BehaviourTest < Test::Unit::TestCase
     assert ''.mb_chars.respond_to?(:capitalize!) # Defined on Chars
     assert ''.mb_chars.respond_to?(:gsub) # Defined on String
     assert !''.mb_chars.respond_to?(:undefined_method) # Not defined
+  end
+
+  def test_method_works_for_proxyed_methods
+    assert_equal 'll', 'hello'.mb_chars.method(:slice).call(2..3) # Defined on Chars
+    chars = 'hello'.mb_chars
+    assert_equal 'Hello', chars.method(:capitalize!).call # Defined on Chars
+    assert_equal 'Hello', chars
+    assert_equal 'jello', 'hello'.mb_chars.method(:gsub).call(/h/, 'j') # Defined on String
+    assert_raise(NameError){ ''.mb_chars.method(:undefined_method) } # Not defined
   end
 
   def test_acts_like_string
@@ -465,7 +478,7 @@ end
 # The default Multibyte Chars proxy has more features than the normal string implementation. Tests
 # for the implementation of these features should run on all Ruby versions and shouldn't be tested
 # through the proxy methods.
-class MultibyteCharsExtrasTest < Test::Unit::TestCase
+class MultibyteCharsExtrasTest < ActiveSupport::TestCase
   include MultibyteTestHelpers
 
   def test_upcase_should_be_unicode_aware
@@ -474,8 +487,13 @@ class MultibyteCharsExtrasTest < Test::Unit::TestCase
   end
 
   def test_downcase_should_be_unicode_aware
-    assert_equal "абвгд\0f", chars("аБвгд\0f").downcase
+    assert_equal "абвгд\0f", chars("аБвгд\0F").downcase
     assert_equal 'こにちわ', chars('こにちわ').downcase
+  end
+
+  def test_swapcase_should_be_unicode_aware
+    assert_equal "аaéÜ\0f", chars("АAÉü\0F").swapcase
+    assert_equal 'こにちわ', chars('こにちわ').swapcase
   end
 
   def test_capitalize_should_be_unicode_aware
@@ -487,6 +505,15 @@ class MultibyteCharsExtrasTest < Test::Unit::TestCase
     end
   end
 
+  def test_titleize_should_be_unicode_aware
+    assert_equal "Él Que Se Enteró", chars("ÉL QUE SE ENTERÓ").titleize
+    assert_equal "Абвг Абвг", chars("аБвг аБвг").titleize
+  end
+
+  def test_titleize_should_not_affect_characters_that_do_not_case_fold
+    assert_equal "日本語", chars("日本語").titleize
+  end
+
   def test_limit_should_not_break_on_blank_strings
     example = chars('')
     assert_equal example, example.limit(0)
@@ -495,7 +522,7 @@ class MultibyteCharsExtrasTest < Test::Unit::TestCase
 
   def test_limit_should_work_on_a_multibyte_string
     example = chars(UNICODE_STRING)
-    bytesize = UNICODE_STRING.respond_to?(:bytesize) ? UNICODE_STRING.bytesize : UNICODE_STRING.size
+    bytesize = UNICODE_STRING.bytesize
 
     assert_equal UNICODE_STRING, example.limit(bytesize)
     assert_equal '', example.limit(0)
@@ -594,7 +621,7 @@ class MultibyteCharsExtrasTest < Test::Unit::TestCase
       else
         str = input
       end
-      assert_equal expected_length, chars(str).g_length
+      assert_equal expected_length, chars(str).grapheme_length
     end
   end
 
@@ -649,6 +676,9 @@ class MultibyteCharsExtrasTest < Test::Unit::TestCase
     assert_equal "ð¥¤¤", chars(byte_string).tidy_bytes(true)
   end
 
+  def test_class_is_not_forwarded
+    assert_equal BYTE_STRING.dup.mb_chars.class, ActiveSupport::Multibyte::Chars
+  end
 
   private
 

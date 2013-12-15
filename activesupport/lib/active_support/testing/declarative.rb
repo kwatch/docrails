@@ -1,27 +1,30 @@
 module ActiveSupport
   module Testing
     module Declarative
-      
-      def self.extended(klass)
+
+      def self.extended(klass) #:nodoc:
         klass.class_eval do
-          
+
           unless method_defined?(:describe)
             def self.describe(text)
-              class_eval <<-RUBY_EVAL
+              class_eval <<-RUBY_EVAL, __FILE__, __LINE__ + 1
                 def self.name
                   "#{text}"
                 end
               RUBY_EVAL
             end
           end
-          
+
         end
-      end 
+      end
 
       unless defined?(Spec)
-        # test "verify something" do
-        #   ...
-        # end
+        # Helper to define a test method using a String. Under the hood, it replaces
+        # spaces with underscores and defines the test method.
+        #
+        #   test "verify something" do
+        #     ...
+        #   end
         def test(name, &block)
           test_name = "test_#{name.gsub(/\s+/,'_')}".to_sym
           defined = instance_method(test_name) rescue false

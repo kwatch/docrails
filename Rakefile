@@ -1,13 +1,22 @@
-require 'rake'
-require 'rake/rdoctask'
-require 'rake/gempackagetask'
+require 'sdoc'
+require 'net/http'
 
-PROJECTS = %w(activesupport activemodel actionpack actionmailer activeresource activerecord railties)
+$:.unshift File.expand_path('..', __FILE__)
+require "tasks/release"
+require 'railties/lib/rails/api/task'
+
+desc "Build gem files for all projects"
+task :build => "all:build"
+
+desc "Release all gems to rubygems and create a tag"
+task :release => "all:release"
+
+PROJECTS = %w(activesupport activemodel actionpack actionview actionmailer activerecord railties)
 
 desc 'Run all tests by default'
 task :default => %w(test test:isolated)
 
-%w(test test:isolated rdoc package gem).each do |task_name|
+%w(test test:isolated package gem).each do |task_name|
   desc "Run #{task_name} task for all projects"
   task task_name do
     errors = []
@@ -26,115 +35,30 @@ task :smoke do
   system %(cd activerecord && #{$0} sqlite3:isolated_test)
 end
 
-spec = eval(File.read('rails.gemspec'))
-Rake::GemPackageTask.new(spec) do |pkg|
-  pkg.gem_spec = spec
-end
-
-desc "Release all gems to gemcutter. Package rails, package & push components, then push rails"
-task :release => :release_projects do
-  require 'rake/gemcutter'
-  Rake::Gemcutter::Tasks.new(spec).define
-  Rake::Task['gem:push'].invoke
-end
-
-desc "Release all components to gemcutter."
-task :release_projects => :package do
-  errors = []
-  PROJECTS.each do |project|
-    system(%(cd #{project} && #{$0} release)) || errors << project
-  end
-  fail("Errors in #{errors.join(', ')}") unless errors.empty?
-end
-
 desc "Install gems for all projects."
-task :install => :gem do
-  version = File.read("RAILS_VERSION").strip
-  (PROJECTS - ["railties"]).each do |project|
-    puts "INSTALLING #{project}"
-    system("gem install #{project}/pkg/#{project}-#{version}.gem --no-ri --no-rdoc")
-  end
-  system("gem install railties/pkg/railties-#{version}.gem --no-ri --no-rdoc")
-  system("gem install pkg/rails-#{version}.gem --no-ri --no-rdoc")
-end
+task :install => "all:install"
 
 desc "Generate documentation for the Rails framework"
-Rake::RDocTask.new do |rdoc|
-  rdoc.rdoc_dir = 'doc/rdoc'
-  rdoc.title    = "Ruby on Rails Documentation"
-
-  rdoc.options << '--line-numbers' << '--inline-source'
-  rdoc.options << '-A cattr_accessor=object'
-  rdoc.options << '--charset' << 'utf-8'
-
-  rdoc.template = ENV['template'] ? "#{ENV['template']}.rb" : './doc/template/horo'
-
-  rdoc.rdoc_files.include('railties/CHANGELOG')
-  rdoc.rdoc_files.include('railties/MIT-LICENSE')
-  rdoc.rdoc_files.include('railties/README')
-  rdoc.rdoc_files.include('railties/lib/**/*.rb')
-  rdoc.rdoc_files.exclude('railties/lib/rails/generators/**/templates/*')
-
-  rdoc.rdoc_files.include('activerecord/README')
-  rdoc.rdoc_files.include('activerecord/CHANGELOG')
-  rdoc.rdoc_files.include('activerecord/lib/active_record/**/*.rb')
-  rdoc.rdoc_files.exclude('activerecord/lib/active_record/vendor/*')
-
-  rdoc.rdoc_files.include('activeresource/README')
-  rdoc.rdoc_files.include('activeresource/CHANGELOG')
-  rdoc.rdoc_files.include('activeresource/lib/active_resource.rb')
-  rdoc.rdoc_files.include('activeresource/lib/active_resource/*')
-
-  rdoc.rdoc_files.include('actionpack/README')
-  rdoc.rdoc_files.include('actionpack/CHANGELOG')
-  rdoc.rdoc_files.include('actionpack/lib/action_controller/**/*.rb')
-  rdoc.rdoc_files.include('actionpack/lib/action_dispatch/**/*.rb')
-  rdoc.rdoc_files.include('actionpack/lib/action_view/**/*.rb')
-  rdoc.rdoc_files.exclude('actionpack/lib/action_controller/vendor/*')
-
-  rdoc.rdoc_files.include('actionmailer/README')
-  rdoc.rdoc_files.include('actionmailer/CHANGELOG')
-  rdoc.rdoc_files.include('actionmailer/lib/action_mailer/base.rb')
-  rdoc.rdoc_files.exclude('actionmailer/lib/action_mailer/vendor/*')
-
-  rdoc.rdoc_files.include('activesupport/README')
-  rdoc.rdoc_files.include('activesupport/CHANGELOG')
-  rdoc.rdoc_files.include('activesupport/lib/active_support/**/*.rb')
-  rdoc.rdoc_files.exclude('activesupport/lib/active_support/vendor/*')
-
-  rdoc.rdoc_files.include('activemodel/README')
-  rdoc.rdoc_files.include('activemodel/CHANGELOG')
-  rdoc.rdoc_files.include('activemodel/lib/active_model/**/*.rb')
+if ENV['EDGE']
+  Rails::API::EdgeTask.new('rdoc')
+else
+  Rails::API::StableTask.new('rdoc')
 end
 
-# Enhance rdoc task to copy referenced images also
-task :rdoc do
-  FileUtils.mkdir_p "doc/rdoc/files/examples/"
-  FileUtils.copy "activerecord/examples/associations.png", "doc/rdoc/files/examples/associations.png"
-end
-
-desc "Publish API docs for Rails as a whole and for each component"
-task :pdoc => :rdoc do
-  require 'rake/contrib/sshpublisher'
-  Rake::SshDirPublisher.new("wrath.rubyonrails.org", "public_html/api", "doc/rdoc").upload
-  PROJECTS.each do |project|
-    system %(cd #{project} && #{$0} pdoc)
-  end
-end
-
+desc 'Bump all versions to match version.rb'
 task :update_versions do
   require File.dirname(__FILE__) + "/version"
 
   File.open("RAILS_VERSION", "w") do |f|
-    f.write Rails::VERSION::STRING + "\n"
+    f.puts Rails::VERSION::STRING
   end
 
   constants = {
     "activesupport"   => "ActiveSupport",
     "activemodel"     => "ActiveModel",
     "actionpack"      => "ActionPack",
+    "actionview"      => "ActionView",
     "actionmailer"    => "ActionMailer",
-    "activeresource"  => "ActiveResource",
     "activerecord"    => "ActiveRecord",
     "railties"        => "Rails"
   }
@@ -147,5 +71,29 @@ task :update_versions do
         f.write version_file.gsub(/Rails/, constants[project])
       end
     end
+  end
+end
+
+#
+# We have a webhook configured in GitHub that gets invoked after pushes.
+# This hook triggers the following tasks:
+#
+#   * updates the local checkout
+#   * updates Rails Contributors
+#   * generates and publishes edge docs
+#   * if there's a new stable tag, generates and publishes stable docs
+#
+# Everything is automated and you do NOT need to run this task normally.
+#
+# We publish a new version by tagging, and pushing a tag does not trigger
+# that webhook. Stable docs would be updated by any subsequent regular
+# push, but if you want that to happen right away just run this.
+#
+desc 'Publishes docs, run this AFTER a new stable tag has been pushed'
+task :publish_docs do
+  Net::HTTP.new('api.rubyonrails.org', 8080).start do |http|
+    request  = Net::HTTP::Post.new('/rails-master-hook')
+    response = http.request(request)
+    puts response.body
   end
 end

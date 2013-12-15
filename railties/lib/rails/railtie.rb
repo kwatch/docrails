@@ -1,58 +1,47 @@
 require 'rails/initializable'
 require 'rails/configuration'
 require 'active_support/inflector'
-require 'active_support/deprecation'
+require 'active_support/core_ext/module/introspection'
+require 'active_support/core_ext/module/delegation'
 
 module Rails
-  # Railtie is the core of the Rails Framework and provides several hooks to extend
+  # Railtie is the core of the Rails framework and provides several hooks to extend
   # Rails and/or modify the initialization process.
-  # 
+  #
   # Every major component of Rails (Action Mailer, Action Controller,
-  # Action View, Active Record and Active Resource) are all Railties, so each of
-  # them is responsible to set their own initialization. This makes, for example,
-  # Rails absent of any ActiveRecord hook, allowing any other ORM framework to hook in.
-  # 
+  # Action View and Active Record) is a Railtie. Each of
+  # them is responsible for their own initialization. This makes Rails itself
+  # absent of any component hooks, allowing other components to be used in
+  # place of any of the Rails defaults.
+  #
   # Developing a Rails extension does _not_ require any implementation of
   # Railtie, but if you need to interact with the Rails framework during
-  # or after boot, then Railtie is what you need to do that interaction.
-  # 
-  # For example, the following would need you to implement Railtie in your
-  # plugin:
-  # 
+  # or after boot, then Railtie is needed.
+  #
+  # For example, an extension doing any of the following would require Railtie:
+  #
   # * creating initializers
-  # * configuring a Rails framework or the Application, like setting a generator
-  # * adding Rails config.* keys to the environment
-  # * setting up a subscriber to the Rails +ActiveSupport::Notifications+
-  # * adding rake tasks into rails
-  # 
+  # * configuring a Rails framework for the application, like setting a generator
+  # * +adding config.*+ keys to the environment
+  # * setting up a subscriber with ActiveSupport::Notifications
+  # * adding rake tasks
+  #
   # == Creating your Railtie
   #
-  # Implementing Railtie in your Rails extension is done by creating a class
-  # Railtie that has your extension name and making sure that this gets loaded
-  # during boot time of the Rails stack.
-  # 
-  # You can do this however you wish, but here is an example if you want to provide
-  # it for a gem that can be used with or without Rails:
-  # 
-  # * Create a file (say, lib/my_gem/railtie.rb) which contains class Railtie inheriting from
-  #   Rails::Railtie and is namespaced to your gem:
+  # To extend Rails using Railtie, create a Railtie class which inherits
+  # from Rails::Railtie within your extension's namespace. This class must be
+  # loaded during the Rails boot process.
+  #
+  # The following example demonstrates an extension which can be used with or without Rails.
   #
   #   # lib/my_gem/railtie.rb
   #   module MyGem
   #     class Railtie < Rails::Railtie
   #     end
   #   end
-  # 
-  # * Require your own gem as well as rails in this file:
-  # 
-  #   # lib/my_gem/railtie.rb
-  #   require 'my_gem'
-  #   require 'rails'
-  # 
-  #   module MyGem
-  #     class Railtie < Rails::Railtie
-  #     end
-  #   end
+  #
+  #   # lib/my_gem.rb
+  #   require 'my_gem/railtie' if defined?(Rails)
   #
   # == Initializers
   #
@@ -65,12 +54,12 @@ module Rails
   #     end
   #   end
   #
-  # If specified, the block can also receive the application object, in case you 
+  # If specified, the block can also receive the application object, in case you
   # need to access some application specific configuration, like middleware:
   #
   #   class MyRailtie < Rails::Railtie
   #     initializer "my_railtie.configure_rails_initialization" do |app|
-  #       app.middlewares.use MyRailtie::Middleware
+  #       app.middleware.use MyRailtie::Middleware
   #     end
   #   end
   #
@@ -84,10 +73,10 @@ module Rails
   #
   #   class MyRailtie < Rails::Railtie
   #     # Customize the ORM
-  #     config.generators.orm :my_railtie_orm
+  #     config.app_generators.orm :my_railtie_orm
   #
   #     # Add a to_prepare block which is executed once in production
-  #     # and before which request in development
+  #     # and before each request in development
   #     config.to_prepare do
   #       MyRailtie.setup!
   #     end
@@ -96,9 +85,9 @@ module Rails
   # == Loading rake tasks and generators
   #
   # If your railtie has rake tasks, you can tell Rails to load them through the method
-  # rake tasks:
+  # rake_tasks:
   #
-  #   class MyRailtie < Railtie
+  #   class MyRailtie < Rails::Railtie
   #     rake_tasks do
   #       load "path/to/my_railtie.tasks"
   #     end
@@ -108,82 +97,57 @@ module Rails
   # your generators at a different location, you can specify in your Railtie a block which
   # will load them during normal generators lookup:
   #
-  #   class MyRailtie < Railtie
+  #   class MyRailtie < Rails::Railtie
   #     generators do
   #       require "path/to/my_railtie_generator"
   #     end
   #   end
   #
-  # == Adding your subscriber
-  #
-  # Since version 3.0, Rails ships with a notification system which is used for several
-  # purposes, including logging. If you are sending notifications in your Railtie, you may
-  # want to add a subscriber to consume such notifications for logging purposes.
-  #
-  # The subscriber is added under the railtie_name namespace and only consumes notifications
-  # under the given namespace. For example, let's suppose your railtie is publishing the
-  # following "something_expensive" instrumentation:
-  #
-  #   ActiveSupport::Notifications.instrument "my_railtie.something_expensive" do
-  #     # something expensive
-  #   end
-  #
-  # You can log this instrumentation with your own Rails::Subscriber:
-  #
-  #   class MyRailtie::Subscriber < Rails::Subscriber
-  #     def something_expensive(event)
-  #       info("Something expensive took %.1fms" % event.duration)
-  #     end
-  #   end
-  #
-  # By registering it:
-  #
-  #   class MyRailtie < Railtie
-  #     subscriber :my_gem, MyRailtie::Subscriber.new
-  #   end
-  #
-  # Take a look in Rails::Subscriber docs for more information.
-  #
-  # == Application, Plugin and Engine
+  # == Application and Engine
   #
   # A Rails::Engine is nothing more than a Railtie with some initializers already set.
-  # And since Rails::Application and Rails::Plugin are engines, the same configuration
-  # described here can be used in all three.
+  # And since Rails::Application is an engine, the same configuration described here
+  # can be used in both.
   #
   # Be sure to look at the documentation of those specific classes for more information.
-  # 
+  #
   class Railtie
-    autoload :Configurable,  "rails/railtie/configurable"
     autoload :Configuration, "rails/railtie/configuration"
 
     include Initializable
 
-    ABSTRACT_RAILTIES = %w(Rails::Railtie Rails::Plugin Rails::Engine Rails::Application)
+    ABSTRACT_RAILTIES = %w(Rails::Railtie Rails::Engine Rails::Application)
 
     class << self
+      private :new
+      delegate :config, to: :instance
+
       def subclasses
         @subclasses ||= []
       end
 
       def inherited(base)
         unless base.abstract_railtie?
-          base.send(:include, self::Configurable)
           subclasses << base
         end
-      end
-
-      def railtie_name(*)
-        ActiveSupport::Deprecation.warn "railtie_name is deprecated and has no effect", caller
-      end
-
-      def log_subscriber(name, log_subscriber)
-        Rails::LogSubscriber.add(name, log_subscriber)
       end
 
       def rake_tasks(&blk)
         @rake_tasks ||= []
         @rake_tasks << blk if blk
         @rake_tasks
+      end
+
+      def console(&blk)
+        @load_console ||= []
+        @load_console << blk if blk
+        @load_console
+      end
+
+      def runner(&blk)
+        @load_runner ||= []
+        @load_runner << blk if blk
+        @load_runner
       end
 
       def generators(&blk)
@@ -195,25 +159,90 @@ module Rails
       def abstract_railtie?
         ABSTRACT_RAILTIES.include?(name)
       end
+
+      def railtie_name(name = nil)
+        @railtie_name = name.to_s if name
+        @railtie_name ||= generate_railtie_name(self.name)
+      end
+
+      # Since Rails::Railtie cannot be instantiated, any methods that call
+      # +instance+ are intended to be called only on subclasses of a Railtie.
+      def instance
+        @instance ||= new
+      end
+
+      def respond_to_missing?(*args)
+        instance.respond_to?(*args) || super
+      end
+
+      # Allows you to configure the railtie. This is the same method seen in
+      # Railtie::Configurable, but this module is no longer required for all
+      # subclasses of Railtie so we provide the class method here.
+      def configure(&block)
+        instance.configure(&block)
+      end
+
+      protected
+        def generate_railtie_name(class_or_module)
+          ActiveSupport::Inflector.underscore(class_or_module).tr("/", "_")
+        end
+
+        # If the class method does not have a method, then send the method call
+        # to the Railtie instance.
+        def method_missing(name, *args, &block)
+          if instance.respond_to?(name)
+            instance.public_send(name, *args, &block)
+          else
+            super
+          end
+        end
     end
 
-    def eager_load!
+    delegate :railtie_name, to: :class
+
+    def initialize
+      if self.class.abstract_railtie?
+        raise "#{self.class.name} is abstract, you cannot instantiate it directly."
+      end
     end
 
-    def rake_tasks
-      self.class.rake_tasks
+    def configure(&block)
+      instance_eval(&block)
     end
 
-    def generators
-      self.class.generators
+    def config
+      @config ||= Railtie::Configuration.new
     end
 
-    def load_tasks
-      rake_tasks.each { |blk| blk.call }
+    def railtie_namespace
+      @railtie_namespace ||= self.class.parents.detect { |n| n.respond_to?(:railtie_namespace) }
     end
 
-    def load_generators
-      generators.each { |blk| blk.call }
+    protected
+
+    def run_console_blocks(app) #:nodoc:
+      self.class.console.each { |block| block.call(app) }
+    end
+
+    def run_generators_blocks(app) #:nodoc:
+      self.class.generators.each { |block| block.call(app) }
+    end
+
+    def run_runner_blocks(app) #:nodoc:
+      self.class.runner.each { |block| block.call(app) }
+    end
+
+    def run_tasks_blocks(app) #:nodoc:
+      extend Rake::DSL
+      self.class.rake_tasks.each { |block| instance_exec(app, &block) }
+
+      # Load also tasks from all superclasses
+      klass = self.class.superclass
+
+      while klass.respond_to?(:rake_tasks)
+        klass.rake_tasks.each { |t| instance_exec(app, &t) }
+        klass = klass.superclass
+      end
     end
   end
 end

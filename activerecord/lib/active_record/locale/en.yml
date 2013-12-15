@@ -4,12 +4,19 @@ en:
     #created_at: "Created at"
     #updated_at: "Updated at"
 
-  # ActiveRecord models configuration
+  # Default error messages
+  errors:
+    messages:
+      taken: "has already been taken"
+
+  # Active Record models configuration
   activerecord:
     errors:
       messages:
-        taken: "has already been taken"
         record_invalid: "Validation failed: %{errors}"
+        restrict_dependent_destroy:
+          one: "Cannot delete record because a dependent %{record} exists"
+          many: "Cannot delete record because dependent %{record} exist"
         # Append your own errors here or at the model/attributes scope.
 
       # You can define own errors for models or model attributes.
@@ -22,7 +29,7 @@ en:
       #       attributes:
       #         login:
       #           blank: "This is a custom blank message for User login"
-      # Will define custom blank validation message for User model and 
+      # Will define custom blank validation message for User model and
       # custom blank validation message for login attribute of User model.
       #models:
 
@@ -31,7 +38,7 @@ en:
       # For example,
       #   user: "Dude"
       # will translate User model name to "Dude"
-    
+
     # Translate model attribute names. Used in Model.human_attribute_name(attribute).
     #attributes:
       # For example,

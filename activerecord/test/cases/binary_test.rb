@@ -1,3 +1,4 @@
+# encoding: utf-8
 require "cases/helper"
 
 # Without using prepared statements, it makes no sense to test
@@ -7,14 +8,32 @@ unless current_adapter?(:SybaseAdapter, :DB2Adapter, :FirebirdAdapter)
   require 'models/binary'
 
   class BinaryTest < ActiveRecord::TestCase
-    FIXTURES = %w(flowers.jpg example.log)
+    FIXTURES = %w(flowers.jpg example.log test.txt)
+
+    def test_mixed_encoding
+      str = "\x80"
+      str.force_encoding('ASCII-8BIT')
+
+      binary = Binary.new :name => 'いただきます！', :data => str
+      binary.save!
+      binary.reload
+      assert_equal str, binary.data
+
+      name = binary.name
+
+      # Mysql adapter doesn't properly encode things, so we have to do it
+      if current_adapter?(:MysqlAdapter)
+        name.force_encoding(Encoding::UTF_8)
+      end
+      assert_equal 'いただきます！', name
+    end
 
     def test_load_save
       Binary.delete_all
 
       FIXTURES.each do |filename|
         data = File.read(ASSETS_ROOT + "/#{filename}")
-        data.force_encoding('ASCII-8BIT') if data.respond_to?(:force_encoding)
+        data.force_encoding('ASCII-8BIT')
         data.freeze
 
         bin = Binary.new(:data => data)

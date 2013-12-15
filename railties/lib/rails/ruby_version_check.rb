@@ -1,10 +1,13 @@
-min_release  = "1.8.7"
-ruby_release = "#{RUBY_VERSION} (#{RUBY_RELEASE_DATE})"
-if ruby_release < min_release
+if RUBY_VERSION < '1.9.3'
+  desc = defined?(RUBY_DESCRIPTION) ? RUBY_DESCRIPTION : "ruby #{RUBY_VERSION} (#{RUBY_RELEASE_DATE})"
   abort <<-end_message
 
-    Rails requires Ruby version #{min_release} or later.
-    You're running #{ruby_release}; please upgrade to continue.
+    Rails 4 prefers to run on Ruby 2.0.
+
+    You're running
+      #{desc}
+
+    Please upgrade to Ruby 1.9.3 or newer to continue.
 
   end_message
 end

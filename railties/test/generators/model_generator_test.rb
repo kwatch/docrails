@@ -7,8 +7,20 @@ class ModelGeneratorTest < Rails::Generators::TestCase
 
   def test_help_shows_invoked_generators_options
     content = run_generator ["--help"]
-    assert_match /ActiveRecord options:/, content
-    assert_match /TestUnit options:/, content
+    assert_match(/ActiveRecord options:/, content)
+    assert_match(/TestUnit options:/, content)
+  end
+
+  def test_model_with_missing_attribute_type
+    run_generator ["post", "title", "body:text", "author"]
+
+    assert_migration "db/migrate/create_posts.rb" do |m|
+      assert_method :change, m do |up|
+        assert_match(/t\.string :title/, up)
+        assert_match(/t\.text :body/, up)
+        assert_match(/t\.string :author/, up)
+      end
+    end
   end
 
   def test_invokes_default_orm
@@ -93,15 +105,80 @@ class ModelGeneratorTest < Rails::Generators::TestCase
     run_generator ["product", "name:string", "supplier_id:integer"]
 
     assert_migration "db/migrate/create_products.rb" do |m|
-      assert_class_method :up, m do |up|
-        assert_match /create_table :products/, up
-        assert_match /t\.string :name/, up
-        assert_match /t\.integer :supplier_id/, up
+      assert_method :change, m do |up|
+        assert_match(/create_table :products/, up)
+        assert_match(/t\.string :name/, up)
+        assert_match(/t\.integer :supplier_id/, up)
       end
+    end
+  end
 
-      assert_class_method :down, m do |down|
-        assert_match /drop_table :products/, down
+  def test_migration_with_attributes_and_with_index
+    run_generator ["product", "name:string:index", "supplier_id:integer:index", "user_id:integer:uniq", "order_id:uniq"]
+
+    assert_migration "db/migrate/create_products.rb" do |m|
+      assert_method :change, m do |up|
+        assert_match(/create_table :products/, up)
+        assert_match(/t\.string :name/, up)
+        assert_match(/t\.integer :supplier_id/, up)
+        assert_match(/t\.integer :user_id/, up)
+        assert_match(/t\.string :order_id/, up)
+
+        assert_match(/add_index :products, :name/, up)
+        assert_match(/add_index :products, :supplier_id/, up)
+        assert_match(/add_index :products, :user_id, unique: true/, up)
+        assert_match(/add_index :products, :order_id, unique: true/, up)
       end
+    end
+  end
+
+  def test_migration_with_attributes_and_with_wrong_index_declaration
+    run_generator ["product", "name:string", "supplier_id:integer:inex", "user_id:integer:unqu"]
+
+    assert_migration "db/migrate/create_products.rb" do |m|
+      assert_method :change, m do |up|
+        assert_match(/create_table :products/, up)
+        assert_match(/t\.string :name/, up)
+        assert_match(/t\.integer :supplier_id/, up)
+        assert_match(/t\.integer :user_id/, up)
+
+        assert_no_match(/add_index :products, :name/, up)
+        assert_no_match(/add_index :products, :supplier_id/, up)
+        assert_no_match(/add_index :products, :user_id/, up)
+      end
+    end
+  end
+
+  def test_migration_with_missing_attribute_type_and_with_index
+    run_generator ["product", "name:index", "supplier_id:integer:index", "year:integer"]
+
+    assert_migration "db/migrate/create_products.rb" do |m|
+      assert_method :change, m do |up|
+        assert_match(/create_table :products/, up)
+        assert_match(/t\.string :name/, up)
+        assert_match(/t\.integer :supplier_id/, up)
+
+        assert_match(/add_index :products, :name/, up)
+        assert_match(/add_index :products, :supplier_id/, up)
+        assert_no_match(/add_index :products, :year/, up)
+      end
+    end
+  end
+
+  def test_add_migration_with_attributes_index_declaration_and_attribute_options
+    run_generator ["product", "title:string{40}:index", "content:string{255}", "price:decimal{5,2}:index", "discount:decimal{5,2}:uniq", "supplier:references{polymorphic}"]
+
+    assert_migration "db/migrate/create_products.rb" do |content|
+      assert_method :change, content do |up|
+        assert_match(/create_table :products/, up)
+        assert_match(/t.string :title, limit: 40/, up)
+        assert_match(/t.string :content, limit: 255/, up)
+        assert_match(/t.decimal :price, precision: 5, scale: 2/, up)
+        assert_match(/t.references :supplier, polymorphic: true/, up)
+      end
+      assert_match(/add_index :products, :title/, content)
+      assert_match(/add_index :products, :price/, content)
+      assert_match(/add_index :products, :discount, unique: true/, content)
     end
   end
 
@@ -117,13 +194,23 @@ class ModelGeneratorTest < Rails::Generators::TestCase
   end
 
   def test_model_with_references_attribute_generates_belongs_to_associations
-    run_generator ["product", "name:string", "supplier_id:references"]
+    run_generator ["product", "name:string", "supplier:references"]
     assert_file "app/models/product.rb", /belongs_to :supplier/
   end
 
   def test_model_with_belongs_to_attribute_generates_belongs_to_associations
-    run_generator ["product", "name:string", "supplier_id:belongs_to"]
+    run_generator ["product", "name:string", "supplier:belongs_to"]
     assert_file "app/models/product.rb", /belongs_to :supplier/
+  end
+
+  def test_model_with_polymorphic_references_attribute_generates_belongs_to_associations
+    run_generator ["product", "name:string", "supplier:references{polymorphic}"]
+    assert_file "app/models/product.rb", /belongs_to :supplier, polymorphic: true/
+  end
+
+  def test_model_with_polymorphic_belongs_to_attribute_generates_belongs_to_associations
+    run_generator ["product", "name:string", "supplier:belongs_to{polymorphic}"]
+    assert_file "app/models/product.rb", /belongs_to :supplier, polymorphic: true/
   end
 
   def test_migration_with_timestamps
@@ -135,34 +222,82 @@ class ModelGeneratorTest < Rails::Generators::TestCase
     run_generator ["account", "--no-timestamps"]
 
     assert_migration "db/migrate/create_accounts.rb" do |m|
-      assert_class_method :up, m do |up|
-        assert_no_match /t.timestamps/, up
+      assert_method :change, m do |up|
+        assert_no_match(/t.timestamps/, up)
       end
     end
   end
 
-  def test_migration_already_exists_error_message
+  def test_migration_is_skipped_with_skip_option
     run_generator
-    error = capture(:stderr){ run_generator ["Account"], :behavior => :skip }
-    assert_match /Another migration is already named create_accounts/, error
+    output = run_generator ["Account", "--skip"]
+    assert_match %r{skip\s+db/migrate/\d+_create_accounts.rb}, output
+  end
+
+  def test_migration_is_ignored_as_identical_with_skip_option
+    run_generator ["Account"]
+    output = run_generator ["Account", "--skip"]
+    assert_match %r{identical\s+db/migrate/\d+_create_accounts.rb}, output
+  end
+
+  def test_migration_is_skipped_on_skip_behavior
+    run_generator
+    output = run_generator ["Account"], behavior: :skip
+    assert_match %r{skip\s+db/migrate/\d+_create_accounts.rb}, output
   end
 
   def test_migration_error_is_not_shown_on_revoke
     run_generator
-    error = capture(:stderr){ run_generator ["Account"], :behavior => :revoke }
-    assert_no_match /Another migration is already named create_accounts/, error
+    error = capture(:stderr){ run_generator ["Account"], behavior: :revoke }
+    assert_no_match(/Another migration is already named create_accounts/, error)
   end
 
   def test_migration_is_removed_on_revoke
     run_generator
-    run_generator ["Account"], :behavior => :revoke
+    run_generator ["Account"], behavior: :revoke
     assert_no_migration "db/migrate/create_accounts.rb"
+  end
+
+  def test_existing_migration_is_removed_on_force
+    run_generator
+    old_migration = Dir["#{destination_root}/db/migrate/*_create_accounts.rb"].first
+    error = capture(:stderr) { run_generator ["Account", "--force"] }
+    assert_no_match(/Another migration is already named create_accounts/, error)
+    assert_no_file old_migration
+    assert_migration "db/migrate/create_accounts.rb"
   end
 
   def test_invokes_default_test_framework
     run_generator
-    assert_file "test/unit/account_test.rb", /class AccountTest < ActiveSupport::TestCase/
+    assert_file "test/models/account_test.rb", /class AccountTest < ActiveSupport::TestCase/
+
     assert_file "test/fixtures/accounts.yml", /name: MyString/, /age: 1/
+    assert_generated_fixture("test/fixtures/accounts.yml",
+                             {"one"=>{"name"=>"MyString", "age"=>1}, "two"=>{"name"=>"MyString", "age"=>1}})
+  end
+
+  def test_fixtures_use_the_references_ids
+    run_generator ["LineItem", "product:references", "cart:belongs_to"]
+
+    assert_file "test/fixtures/line_items.yml", /product_id: \n  cart_id: /
+    assert_generated_fixture("test/fixtures/line_items.yml",
+                             {"one"=>{"product_id"=>nil, "cart_id"=>nil}, "two"=>{"product_id"=>nil, "cart_id"=>nil}})
+  end
+
+  def test_fixtures_use_the_references_ids_and_type
+    run_generator ["LineItem", "product:references{polymorphic}", "cart:belongs_to"]
+
+    assert_file "test/fixtures/line_items.yml", /product_id: \n  product_type: Product\n  cart_id: /
+    assert_generated_fixture("test/fixtures/line_items.yml",
+                             {"one"=>{"product_id"=>nil, "product_type"=>"Product", "cart_id"=>nil},
+                              "two"=>{"product_id"=>nil, "product_type"=>"Product", "cart_id"=>nil}})
+  end
+
+  def test_fixtures_respect_reserved_yml_keywords
+    run_generator ["LineItem", "no:integer", "Off:boolean", "ON:boolean"]
+
+    assert_generated_fixture("test/fixtures/line_items.yml",
+                             {"one"=>{"no"=>1, "Off"=>false, "ON"=>false}, "two"=>{"no"=>1, "Off"=>false, "ON"=>false}})
   end
 
   def test_fixture_is_skipped
@@ -172,12 +307,58 @@ class ModelGeneratorTest < Rails::Generators::TestCase
 
   def test_fixture_is_skipped_if_fixture_replacement_is_given
     content = run_generator ["account", "-r", "factory_girl"]
-    assert_match /factory_girl \[not found\]/, content
+    assert_match(/factory_girl \[not found\]/, content)
     assert_no_file "test/fixtures/accounts.yml"
   end
 
   def test_check_class_collision
     content = capture(:stderr){ run_generator ["object"] }
-    assert_match /The name 'Object' is either already used in your application or reserved/, content
+    assert_match(/The name 'Object' is either already used in your application or reserved/, content)
   end
+
+  def test_index_is_added_for_belongs_to_association
+    run_generator ["account", "supplier:belongs_to"]
+
+    assert_migration "db/migrate/create_accounts.rb" do |m|
+      assert_method :change, m do |up|
+        assert_match(/index: true/, up)
+      end
+    end
+  end
+
+  def test_index_is_added_for_references_association
+    run_generator ["account", "supplier:references"]
+
+    assert_migration "db/migrate/create_accounts.rb" do |m|
+      assert_method :change, m do |up|
+        assert_match(/index: true/, up)
+      end
+    end
+  end
+
+  def test_index_is_skipped_for_belongs_to_association
+    run_generator ["account", "supplier:belongs_to", "--no-indexes"]
+
+    assert_migration "db/migrate/create_accounts.rb" do |m|
+      assert_method :change, m do |up|
+        assert_no_match(/index: true/, up)
+      end
+    end
+  end
+
+  def test_index_is_skipped_for_references_association
+    run_generator ["account", "supplier:references", "--no-indexes"]
+
+    assert_migration "db/migrate/create_accounts.rb" do |m|
+      assert_method :change, m do |up|
+        assert_no_match(/index: true/, up)
+      end
+    end
+  end
+
+  private
+    def assert_generated_fixture(path, parsed_contents)
+      fixture_file = File.new File.expand_path(path, destination_root)
+      assert_equal(parsed_contents, YAML.load(fixture_file))
+    end
 end

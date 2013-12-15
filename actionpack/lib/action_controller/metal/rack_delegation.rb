@@ -9,13 +9,8 @@ module ActionController
              :status, :location, :content_type, :to => "@_response"
 
     def dispatch(action, request)
-      @_response = ActionDispatch::Response.new
-      @_response.request = request
-      super
-    end
-
-    def params
-      @_params ||= @_request.parameters
+      set_response!(request)
+      super(action, request)
     end
 
     def response_body=(body)
@@ -25,6 +20,13 @@ module ActionController
 
     def reset_session
       @_request.reset_session
+    end
+
+    private
+
+    def set_response!(request)
+      @_response         = ActionDispatch::Response.new
+      @_response.request = request
     end
   end
 end

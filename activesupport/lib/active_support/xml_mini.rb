@@ -1,4 +1,7 @@
+require 'time'
+require 'base64'
 require 'active_support/core_ext/module/delegation'
+require 'active_support/core_ext/string/inflections'
 
 module ActiveSupport
   # = XmlMini
@@ -9,7 +12,7 @@ module ActiveSupport
   module XmlMini
     extend self
 
-    # This module exists to decorate files deserialized using Hash.from_xml with
+    # This module decorates files deserialized using Hash.from_xml with
     # the <tt>original_filename</tt> and <tt>content_type</tt> methods.
     module FileLike #:nodoc:
       attr_writer :original_filename, :content_type
@@ -25,7 +28,7 @@ module ActiveSupport
 
     DEFAULT_ENCODINGS = {
       "binary" => "base64"
-    } unless defined?(TYPE_NAMES)
+    } unless defined?(DEFAULT_ENCODINGS)
 
     TYPE_NAMES = {
       "Symbol"     => "symbol",
@@ -36,8 +39,8 @@ module ActiveSupport
       "TrueClass"  => "boolean",
       "FalseClass" => "boolean",
       "Date"       => "date",
-      "DateTime"   => "datetime",
-      "Time"       => "datetime",
+      "DateTime"   => "dateTime",
+      "Time"       => "dateTime",
       "Array"      => "array",
       "Hash"       => "hash"
     } unless defined?(TYPE_NAMES)
@@ -45,25 +48,24 @@ module ActiveSupport
     FORMATTING = {
       "symbol"   => Proc.new { |symbol| symbol.to_s },
       "date"     => Proc.new { |date| date.to_s(:db) },
-      "datetime" => Proc.new { |time| time.xmlschema },
-      "binary"   => Proc.new { |binary| ActiveSupport::Base64.encode64(binary) },
+      "dateTime" => Proc.new { |time| time.xmlschema },
+      "binary"   => Proc.new { |binary| ::Base64.encode64(binary) },
       "yaml"     => Proc.new { |yaml| yaml.to_yaml }
     } unless defined?(FORMATTING)
 
-    # TODO: use Time.xmlschema instead of Time.parse;
-    #       use regexp instead of Date.parse
+    # TODO use regexp instead of Date.parse
     unless defined?(PARSING)
       PARSING = {
         "symbol"       => Proc.new { |symbol|  symbol.to_sym },
         "date"         => Proc.new { |date|    ::Date.parse(date) },
-        "datetime"     => Proc.new { |time|    ::Time.parse(time).utc rescue ::DateTime.parse(time).utc },
+        "datetime"     => Proc.new { |time|    Time.xmlschema(time).utc rescue ::DateTime.parse(time).utc },
         "integer"      => Proc.new { |integer| integer.to_i },
         "float"        => Proc.new { |float|   float.to_f },
         "decimal"      => Proc.new { |number|  BigDecimal(number) },
         "boolean"      => Proc.new { |boolean| %w(1 true).include?(boolean.strip) },
         "string"       => Proc.new { |string|  string.to_s },
         "yaml"         => Proc.new { |yaml|    YAML::load(yaml) rescue yaml },
-        "base64Binary" => Proc.new { |bin|     ActiveSupport::Base64.decode64(bin) },
+        "base64Binary" => Proc.new { |bin|     ::Base64.decode64(bin) },
         "binary"       => Proc.new { |bin, entity| _parse_binary(bin, entity) },
         "file"         => Proc.new { |file, entity| _parse_file(file, entity) }
       }
@@ -74,23 +76,24 @@ module ActiveSupport
       )
     end
 
-    attr_reader :backend
     delegate :parse, :to => :backend
 
+    def backend
+      current_thread_backend || @backend
+    end
+
     def backend=(name)
-      if name.is_a?(Module)
-        @backend = name
-      else
-        require "active_support/xml_mini/#{name.to_s.downcase}"
-        @backend = ActiveSupport.const_get("XmlMini_#{name}")
-      end
+      backend = name && cast_backend_name_to_module(name)
+      self.current_thread_backend = backend if current_thread_backend
+      @backend = backend
     end
 
     def with_backend(name)
-      old_backend, self.backend = backend, name
+      old_backend = current_thread_backend
+      self.current_thread_backend = name && cast_backend_name_to_module(name)
       yield
     ensure
-      self.backend = old_backend
+      self.current_thread_backend = old_backend
     end
 
     def to_tag(key, value, options)
@@ -109,6 +112,7 @@ module ActiveSupport
         type_name ||= TYPE_NAMES[value.class.name]
         type_name ||= value.class.name if value && !value.respond_to?(:to_str)
         type_name   = type_name.to_s   if type_name
+        type_name   = "dateTime" if type_name == "datetime"
 
         key = rename_key(key.to_s, options)
 
@@ -126,32 +130,59 @@ module ActiveSupport
     end
 
     def rename_key(key, options = {})
-      camelize  = options.has_key?(:camelize) && options[:camelize]
+      camelize  = options[:camelize]
       dasherize = !options.has_key?(:dasherize) || options[:dasherize]
-      key = key.camelize  if camelize
-      key = key.dasherize if dasherize
+      if camelize
+        key = true == camelize ? key.camelize : key.camelize(camelize)
+      end
+      key = _dasherize(key) if dasherize
       key
     end
 
     protected
 
-	  # TODO: Add support for other encodings
+    def _dasherize(key)
+      # $2 must be a non-greedy regex for this to work
+      left, middle, right = /\A(_*)(.*?)(_*)\Z/.match(key.strip)[1,3]
+      "#{left}#{middle.tr('_ ', '--')}#{right}"
+    end
+
+    # TODO: Add support for other encodings
     def _parse_binary(bin, entity) #:nodoc:
       case entity['encoding']
       when 'base64'
-        ActiveSupport::Base64.decode64(bin)
+        ::Base64.decode64(bin)
       else
         bin
       end
     end
 
     def _parse_file(file, entity)
-      f = StringIO.new(ActiveSupport::Base64.decode64(file))
+      f = StringIO.new(::Base64.decode64(file))
       f.extend(FileLike)
       f.original_filename = entity['name']
       f.content_type = entity['content_type']
       f
     end
+
+    private
+
+      def current_thread_backend
+        Thread.current[:xml_mini_backend]
+      end
+
+      def current_thread_backend=(name)
+        Thread.current[:xml_mini_backend] = name && cast_backend_name_to_module(name)
+      end
+
+      def cast_backend_name_to_module(name)
+        if name.is_a?(Module)
+          name
+        else
+          require "active_support/xml_mini/#{name.downcase}"
+          ActiveSupport.const_get("XmlMini_#{name}")
+        end
+      end
   end
 
   XmlMini.backend = 'REXML'

@@ -1,30 +1,21 @@
-# Pathname has a warning, so require it first while silencing
-# warnings to shut it up.
-#
-# Also, in 1.9, Bundler creates warnings due to overriding
-# Rubygems methods
-begin
-  old, $VERBOSE = $VERBOSE, nil
-  require 'pathname'
-  require File.expand_path('../../../load_paths', __FILE__)
-ensure
-  $VERBOSE = old
-end
-
-
+require File.expand_path('../../../load_paths', __FILE__)
 require 'active_support/core_ext/kernel/reporting'
+
+# These are the normal settings that will be set up by Railties
+# TODO: Have these tests support other combinations of these values
 silence_warnings do
-  # These external dependencies have warnings :/
-  require 'text/format'
-  require 'mail'
+  Encoding.default_internal = "UTF-8"
+  Encoding.default_external = "UTF-8"
 end
 
-lib = File.expand_path("#{File.dirname(__FILE__)}/../lib")
-$:.unshift(lib) unless $:.include?('lib') || $:.include?(lib)
-
-require 'test/unit'
+require 'active_support/testing/autorun'
 require 'action_mailer'
 require 'action_mailer/test_case'
+require 'mail'
+
+# Emulate AV railtie
+require 'action_view'
+ActionMailer::Base.send(:include, ActionView::Layouts)
 
 # Show backtraces for deprecated behavior for quicker cleanup.
 ActiveSupport::Deprecation.debug = true

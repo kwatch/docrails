@@ -1,13 +1,15 @@
+# encoding: utf-8
 require 'abstract_unit'
 
-class MultipartParamsParsingTest < ActionController::IntegrationTest
+class MultipartParamsParsingTest < ActionDispatch::IntegrationTest
   class TestController < ActionController::Base
     class << self
-      attr_accessor :last_request_parameters
+      attr_accessor :last_request_parameters, :last_parameters
     end
 
     def parse
       self.class.last_request_parameters = request.request_parameters
+      self.class.last_parameters = request.parameters
       head :ok
     end
 
@@ -30,13 +32,29 @@ class MultipartParamsParsingTest < ActionController::IntegrationTest
     assert_equal({ 'foo' => { 'baz' => 'bar'}}, parse_multipart('bracketed_param'))
   end
 
+  test "parse single utf8 parameter" do
+    assert_equal({ 'Iñtërnâtiônàlizætiøn_name' => 'Iñtërnâtiônàlizætiøn_value'}, 
+                 parse_multipart('single_utf8_param'), "request.request_parameters")
+    assert_equal(
+      'Iñtërnâtiônàlizætiøn_value',
+      TestController.last_parameters['Iñtërnâtiônàlizætiøn_name'], "request.parameters")
+  end
+
+  test "parse bracketed utf8 parameter" do
+    assert_equal({ 'Iñtërnâtiônàlizætiøn_name' => { 
+      'Iñtërnâtiônàlizætiøn_nested_name' => 'Iñtërnâtiônàlizætiøn_value'} }, 
+      parse_multipart('bracketed_utf8_param'), "request.request_parameters")
+    assert_equal(
+      {'Iñtërnâtiônàlizætiøn_nested_name' => 'Iñtërnâtiônàlizætiøn_value'},
+      TestController.last_parameters['Iñtërnâtiônàlizætiøn_name'], "request.parameters")
+  end
+
   test "parses text file" do
     params = parse_multipart('text_file')
     assert_equal %w(file foo), params.keys.sort
     assert_equal 'bar', params['foo']
 
     file = params['file']
-    assert_kind_of Tempfile, file
     assert_equal 'file.txt', file.original_filename
     assert_equal "text/plain", file.content_type
     assert_equal 'contents', file.read
@@ -48,8 +66,6 @@ class MultipartParamsParsingTest < ActionController::IntegrationTest
 
     file = params['file']
     foo  = params['foo']
-
-    assert_kind_of Tempfile, file
 
     assert_equal 'file.txt', file.original_filename
     assert_equal "text/plain", file.content_type
@@ -64,11 +80,9 @@ class MultipartParamsParsingTest < ActionController::IntegrationTest
 
     file = params['file']
 
-    assert_kind_of Tempfile, file
-
     assert_equal 'file.txt', file.original_filename
     assert_equal "text/plain", file.content_type
-    assert ('a' * 20480) == file.read
+    assert_equal(('a' * 20480), file.read)
   end
 
   test "parses binary file" do
@@ -77,13 +91,11 @@ class MultipartParamsParsingTest < ActionController::IntegrationTest
     assert_equal 'bar', params['foo']
 
     file = params['file']
-    assert_kind_of Tempfile, file
     assert_equal 'file.csv', file.original_filename
     assert_nil file.content_type
     assert_equal 'contents', file.read
 
     file = params['flowers']
-    assert_kind_of Tempfile, file
     assert_equal 'flowers.jpg', file.original_filename
     assert_equal "image/jpeg", file.content_type
     assert_equal 19512, file.size
@@ -96,8 +108,7 @@ class MultipartParamsParsingTest < ActionController::IntegrationTest
 
     # Rack doesn't handle multipart/mixed for us.
     files = params['files']
-    files.force_encoding('ASCII-8BIT') if files.respond_to?(:force_encoding)
-    assert_equal 19756, files.size
+    assert_equal 19756, files.bytesize
   end
 
   test "does not create tempfile if no file has been selected" do
@@ -130,6 +141,18 @@ class MultipartParamsParsingTest < ActionController::IntegrationTest
     end
   end
 
+  # This can happen in Internet Explorer when redirecting after multipart form submit.
+  test "does not raise EOFError on GET request with multipart content-type" do
+    with_routing do |set|
+      set.draw do
+        get ':action', to: 'multipart_params_parsing_test/test'
+      end
+      headers = { "CONTENT_TYPE" => "multipart/form-data; boundary=AaB03x" }
+      get "/parse", {}, headers
+      assert_response :ok
+    end
+  end
+
   private
     def fixture(name)
       File.open(File.join(FIXTURE_PATH, name), 'rb') do |file|
@@ -150,8 +173,8 @@ class MultipartParamsParsingTest < ActionController::IntegrationTest
 
     def with_test_routing
       with_routing do |set|
-        set.draw do |map|
-          match ':action', :to => 'multipart_params_parsing_test/test'
+        set.draw do
+          post ':action', :to => 'multipart_params_parsing_test/test'
         end
         yield
       end
