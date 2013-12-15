@@ -1,7 +1,7 @@
 require "isolation/abstract_unit"
 
 module ApplicationTests
-  class PathsTest < Test::Unit::TestCase
+  class PathsTest < ActiveSupport::TestCase
     include ActiveSupport::Testing::Isolation
 
     def setup
@@ -15,9 +15,12 @@ module ApplicationTests
           app.config.session_store nil
         end
       RUBY
-      use_frameworks [:action_controller, :action_view, :action_mailer, :active_record]
       require "#{app_path}/config/environment"
       @paths = Rails.application.config.paths
+    end
+
+    def teardown
+      teardown_app
     end
 
     def root(*path)
@@ -25,7 +28,7 @@ module ApplicationTests
     end
 
     def assert_path(paths, *dir)
-      assert_equal [root(*dir)], paths.paths
+      assert_equal [root(*dir)], paths.expanded
     end
 
     def assert_in_load_path(*path)
@@ -37,21 +40,18 @@ module ApplicationTests
     end
 
     test "booting up Rails yields a valid paths object" do
-      assert_path @paths.app.models, "app", "models"
-      assert_path @paths.app.metals, "app", "metal"
-      assert_path @paths.app.helpers, "app", "helpers"
-      assert_path @paths.app.views, "app", "views"
-      assert_path @paths.lib, "lib"
-      assert_path @paths.vendor, "vendor"
-      assert_path @paths.vendor.plugins, "vendor", "plugins"
-      assert_path @paths.tmp, "tmp"
-      assert_path @paths.tmp.cache, "tmp", "cache"
-      assert_path @paths.config, "config"
-      assert_path @paths.config.locales, "config", "locales", "en.yml"
-      assert_path @paths.config.environment, "config", "environment.rb"
-      assert_path @paths.config.environments, "config", "environments", "development.rb"
+      assert_path @paths["app/models"],          "app/models"
+      assert_path @paths["app/helpers"],         "app/helpers"
+      assert_path @paths["app/views"],           "app/views"
+      assert_path @paths["lib"],                 "lib"
+      assert_path @paths["vendor"],              "vendor"
+      assert_path @paths["tmp"],                 "tmp"
+      assert_path @paths["config"],              "config"
+      assert_path @paths["config/locales"],      "config/locales/en.yml"
+      assert_path @paths["config/environment"],  "config/environment.rb"
+      assert_path @paths["config/environments"], "config/environments/development.rb"
 
-      assert_equal root("app", "controllers"), @paths.app.controllers.to_a.first
+      assert_equal root("app", "controllers"), @paths["app/controllers"].expanded.first
     end
 
     test "booting up Rails yields a list of paths that are eager" do
@@ -62,7 +62,7 @@ module ApplicationTests
     end
 
     test "environments has a glob equal to the current environment" do
-      assert_equal "#{Rails.env}.rb", @paths.config.environments.glob
+      assert_equal "#{Rails.env}.rb", @paths["config/environments"].glob
     end
 
     test "load path includes each of the paths in config.paths as long as the directories exist" do
@@ -73,7 +73,6 @@ module ApplicationTests
       assert_in_load_path "vendor"
 
       assert_not_in_load_path "app", "views"
-      assert_not_in_load_path "app", "metal"
       assert_not_in_load_path "config"
       assert_not_in_load_path "config", "locales"
       assert_not_in_load_path "config", "environments"

@@ -1,36 +1,35 @@
-source 'http://rubygems.org'
+source 'https://rubygems.org'
 
-<%- if options.dev? -%>
-gem 'rails', :path => '<%= Rails::Generators::RAILS_DEV_PATH %>'
-gem 'arel',  :git => 'git://github.com/rails/arel.git'
-<%- elsif options.edge? -%>
-gem 'rails', :git => 'git://github.com/rails/rails.git'
-gem 'arel',  :git => 'git://github.com/rails/arel.git'
-<%- else -%>
-gem 'rails', '<%= Rails::VERSION::STRING %>'
+<% max_width = gemfile_entries.map { |g| g.name.length }.max -%>
+<% gemfile_entries.each do |gem| -%>
+<% if gem.comment -%>
 
-# Bundle edge Rails instead:
-# gem 'rails', :git => 'git://github.com/rails/rails.git'
-<%- end -%>
-
-<% unless options[:skip_activerecord] -%>
-gem '<%= gem_for_database %>'<% if require_for_database %>, :require => '<%= require_for_database %>'<% end %>
+# <%= gem.comment %>
+<% end -%>
+<%= gem.commented_out ? '# ' : '' %>gem '<%= gem.name %>'<% if gem.version -%>
+, '<%= gem.version %>'
+<% elsif gem.options.any? -%>
+,<%= gem.padding(max_width) %><%= gem.options.map { |k,v|
+  "#{k}: #{v.inspect}" }.join(', ') %>
+<% else %>
+<% end -%>
 <% end -%>
 
-# Use unicorn as the web server
+# Use ActiveModel has_secure_password
+# gem 'bcrypt-ruby', '~> 3.1.2'
+
+# Use unicorn as the app server
 # gem 'unicorn'
 
-# Deploy with Capistrano
-# gem 'capistrano'
+# Use Capistrano for deployment
+# gem 'capistrano-rails', group: :development
 
-# Bundle the extra gems:
-# gem 'bj'
-# gem 'nokogiri', '1.4.1'
-# gem 'sqlite3-ruby', :require => 'sqlite3'
-# gem 'aws-s3', :require => 'aws/s3'
+<% unless defined?(JRUBY_VERSION) -%>
+# Use debugger
+# gem 'debugger', group: [:development, :test]
+<% end -%>
 
-# Bundle gems for certain environments:
-# gem 'rspec', :group => :test
-# group :test do
-#   gem 'webrat'
-# end
+<% if RUBY_PLATFORM.match(/bccwin|cygwin|emx|mingw|mswin|wince/) -%>
+# Windows does not include zoneinfo files, so bundle the tzinfo-data gem
+gem 'tzinfo-data', platforms: [:mingw, :mswin]
+<% end -%>

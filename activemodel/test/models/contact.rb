@@ -1,4 +1,5 @@
 class Contact
+  extend ActiveModel::Naming
   include ActiveModel::Conversion
 
   attr_accessor :id, :name, :age, :created_at, :awesome, :preferences
@@ -8,11 +9,15 @@ class Contact
   end
 
   def network
-    {:git => :github}
+    { git: :github }
   end
 
   def initialize(options = {})
     options.each { |name, value| send("#{name}=", value) }
+  end
+
+  def pseudonyms
+    nil
   end
 
   def persisted?

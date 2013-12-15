@@ -28,10 +28,14 @@ class Customer < Struct.new(:name, :id)
   end
 end
 
-class BadCustomer < Customer
-end
-
-class GoodCustomer < Customer
+class ValidatedCustomer < Customer
+  def errors
+    if name =~ /Sikachu/i
+      []
+    else
+      [{:name => "is invalid"}]
+    end
+  end
 end
 
 module Quiz
@@ -48,19 +52,17 @@ module Quiz
   end
 end
 
-class Post < Struct.new(:title, :author_name, :body, :secret, :written_on, :cost)
+class Post < Struct.new(:title, :author_name, :body, :secret, :persisted, :written_on, :cost)
   extend ActiveModel::Naming
   include ActiveModel::Conversion
   extend ActiveModel::Translation
 
   alias_method :secret?, :secret
+  alias_method :persisted?, :persisted
 
-  def persisted=(boolean)
-    @persisted = boolean
-  end
-
-  def persisted?
-    @persisted
+  def initialize(*args)
+    super
+    @persisted = false
   end
 
   attr_accessor :author
@@ -83,7 +85,7 @@ class Comment
   def to_key; id ? [id] : nil end
   def save; @id = 1; @post_id = 1 end
   def persisted?; @id.present? end
-  def to_param; @id; end
+  def to_param; @id.to_s; end
   def name
     @id.nil? ? "new #{self.class.name.downcase}" : "#{self.class.name.downcase} ##{@id}"
   end
@@ -91,61 +93,26 @@ class Comment
   attr_accessor :relevances
   def relevances_attributes=(attributes); end
 
+  attr_accessor :body
 end
 
-class Tag
-  extend ActiveModel::Naming
-  include ActiveModel::Conversion
-
-  attr_reader :id
-  attr_reader :post_id
-  def initialize(id = nil, post_id = nil); @id, @post_id = id, post_id end
-  def to_key; id ? [id] : nil end
-  def save; @id = 1; @post_id = 1 end
-  def persisted?; @id.present? end
-  def to_param; @id; end
-  def value
-    @id.nil? ? "new #{self.class.name.downcase}" : "#{self.class.name.downcase} ##{@id}"
+module Blog
+  def self.use_relative_model_naming?
+    true
   end
 
-  attr_accessor :relevances
-  def relevances_attributes=(attributes); end
+  class Post < Struct.new(:title, :id)
+    extend ActiveModel::Naming
+    include ActiveModel::Conversion
 
-end
-
-class CommentRelevance
-  extend ActiveModel::Naming
-  include ActiveModel::Conversion
-
-  attr_reader :id
-  attr_reader :comment_id
-  def initialize(id = nil, comment_id = nil); @id, @comment_id = id, comment_id end
-  def to_key; id ? [id] : nil end
-  def save; @id = 1; @comment_id = 1 end
-  def persisted?; @id.present? end
-  def to_param; @id; end
-  def value
-    @id.nil? ? "new #{self.class.name.downcase}" : "#{self.class.name.downcase} ##{@id}"
+    def persisted?
+      id.present?
+    end
   end
 end
 
-class TagRelevance
-  extend ActiveModel::Naming
-  include ActiveModel::Conversion
-
-  attr_reader :id
-  attr_reader :tag_id
-  def initialize(id = nil, tag_id = nil); @id, @tag_id = id, tag_id end
-  def to_key; id ? [id] : nil end
-  def save; @id = 1; @tag_id = 1 end
-  def persisted?; @id.present? end
-  def to_param; @id; end
-  def value
-    @id.nil? ? "new #{self.class.name.downcase}" : "#{self.class.name.downcase} ##{@id}"
+class RenderJsonTestException < Exception
+  def as_json(options = nil)
+    { :error => self.class.name, :message => self.to_s }
   end
-end
-
-class Author < Comment
-  attr_accessor :post
-  def post_attributes=(attributes); end
 end

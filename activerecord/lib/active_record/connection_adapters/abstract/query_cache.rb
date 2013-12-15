@@ -1,26 +1,30 @@
-require 'active_support/core_ext/object/duplicable'
-
 module ActiveRecord
   module ConnectionAdapters # :nodoc:
     module QueryCache
       class << self
-        def included(base)
+        def included(base) #:nodoc:
           dirties_query_cache base, :insert, :update, :delete
         end
 
         def dirties_query_cache(base, *method_names)
           method_names.each do |method_name|
             base.class_eval <<-end_code, __FILE__, __LINE__ + 1
-              def #{method_name}(*)                         # def update_with_query_dirty(*args)
-                clear_query_cache if @query_cache_enabled   #   clear_query_cache if @query_cache_enabled
-                super                                       #   update_without_query_dirty(*args)
-              end                                           # end
+              def #{method_name}(*)
+                clear_query_cache if @query_cache_enabled
+                super
+              end
             end_code
           end
         end
       end
 
       attr_reader :query_cache, :query_cache_enabled
+
+      def initialize(*)
+        super
+        @query_cache         = Hash.new { |h,sql| h[sql] = {} }
+        @query_cache_enabled = false
+      end
 
       # Enable the query cache within the block.
       def cache
@@ -29,6 +33,14 @@ module ActiveRecord
       ensure
         clear_query_cache
         @query_cache_enabled = old
+      end
+
+      def enable_query_cache!
+        @query_cache_enabled = true
+      end
+
+      def disable_query_cache!
+        @query_cache_enabled = false
       end
 
       # Disable the query cache within the block.
@@ -49,41 +61,34 @@ module ActiveRecord
         @query_cache.clear
       end
 
-      def select_all(*args)
-        if @query_cache_enabled
-          cache_sql(args.first) { super }
-        else
-          super
-        end
-      end
-
-      def columns(*)
-        if @query_cache_enabled
-          @query_cache["SHOW FIELDS FROM #{args.first}"] ||= super
+      def select_all(arel, name = nil, binds = [])
+        if @query_cache_enabled && !locked?(arel)
+          sql = to_sql(arel, binds)
+          cache_sql(sql, binds) { super(sql, name, binds) }
         else
           super
         end
       end
 
       private
-        def cache_sql(sql)
-          result =
-            if @query_cache.has_key?(sql)
-              ActiveSupport::Notifications.instrument("sql.active_record",
-                :sql => sql, :name => "CACHE", :connection_id => self.object_id)
-              @query_cache[sql]
-            else
-              @query_cache[sql] = yield
-            end
 
-          if Array === result
-            result.collect { |row| row.dup }
+      def cache_sql(sql, binds)
+        result =
+          if @query_cache[sql].key?(binds)
+            ActiveSupport::Notifications.instrument("sql.active_record",
+              :sql => sql, :binds => binds, :name => "CACHE", :connection_id => object_id)
+            @query_cache[sql][binds]
           else
-            result.duplicable? ? result.dup : result
+            @query_cache[sql][binds] = yield
           end
-        rescue TypeError
-          result
-        end
+        result.dup
+      end
+
+      # If arel is locked this is a SELECT ... FOR UPDATE or somesuch. Such
+      # queries should not be cached.
+      def locked?(arel)
+        arel.respond_to?(:locked) && arel.locked
+      end
     end
   end
 end

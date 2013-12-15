@@ -3,7 +3,7 @@ require 'abstract_unit'
 module AbstractController
   module Testing
     class MyCollector
-      include Collector
+      include AbstractController::Collector
       attr_accessor :responses
 
       def initialize
@@ -42,7 +42,7 @@ module AbstractController
         end
       end
 
-      test "generated methods call custom with args received" do
+      test "generated methods call custom with arguments received" do
         collector = MyCollector.new
         collector.html
         collector.text(:foo)

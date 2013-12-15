@@ -1,12 +1,16 @@
 require 'isolation/abstract_unit'
 
 module ApplicationTests
-  class TestTest < Test::Unit::TestCase
+  class TestTest < ActiveSupport::TestCase
     include ActiveSupport::Testing::Isolation
 
     def setup
       build_app
       boot_rails
+    end
+
+    def teardown
+      teardown_app
     end
 
     test "truth" do
@@ -20,24 +24,7 @@ module ApplicationTests
         end
       RUBY
 
-      run_test 'unit/foo_test.rb'
-    end
-
-    # Run just in Ruby < 1.9
-    if defined?(Test::Unit::Util::BacktraceFilter)
-      test "adds backtrace cleaner" do
-        app_file 'test/unit/backtrace_test.rb', <<-RUBY
-          require 'test_helper'
-
-          class FooTest < ActiveSupport::TestCase
-            def test_truth
-              assert Test::Unit::Util::BacktraceFilter.ancestors.include?(Rails::BacktraceFilterForTestUnit)
-            end
-          end
-        RUBY
-
-        run_test 'unit/backtrace_test.rb'
-      end
+      assert_successful_test_run 'unit/foo_test.rb'
     end
 
     test "integration test" do
@@ -53,7 +40,7 @@ module ApplicationTests
       app_file 'test/integration/posts_test.rb', <<-RUBY
         require 'test_helper'
 
-        class PostsTest < ActionController::IntegrationTest
+        class PostsTest < ActionDispatch::IntegrationTest
           def test_index
             get '/posts'
             assert_response :success
@@ -62,19 +49,48 @@ module ApplicationTests
         end
       RUBY
 
-      run_test 'integration/posts_test.rb'
+      assert_successful_test_run 'integration/posts_test.rb'
+    end
+
+    test "enable full backtraces on test failures" do
+      app_file 'test/unit/failing_test.rb', <<-RUBY
+        require 'test_helper'
+
+        class FailingTest < ActiveSupport::TestCase
+          def test_failure
+            raise "fail"
+          end
+        end
+      RUBY
+
+      output = run_test_file('unit/failing_test.rb', env: { "BACKTRACE" => "1" })
+      assert_match %r{/app/test/unit/failing_test\.rb}, output
     end
 
     private
-      def run_test(name)
-        result = ruby '-Itest', "#{app_path}/test/#{name}"
+      def assert_successful_test_run(name)
+        result = run_test_file(name)
         assert_equal 0, $?.to_i, result
       end
 
+      def run_test_file(name, options = {})
+        ruby '-Itest', "#{app_path}/test/#{name}", options
+      end
+
       def ruby(*args)
+        options = args.extract_options!
+        env = options.fetch(:env, {})
+        env["RUBYLIB"] = $:.join(':')
+
         Dir.chdir(app_path) do
-          `RUBYLIB='#{$:.join(':')}' #{Gem.ruby} #{args.join(' ')}`
+          `#{env_string(env)} #{Gem.ruby} #{args.join(' ')}`
         end
+      end
+
+      def env_string(variables)
+        variables.map do |key, value|
+          "#{key}='#{value}'"
+        end.join " "
       end
   end
 end

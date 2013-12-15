@@ -1,44 +1,54 @@
+require "active_support/core_ext/module/delegation"
+
 module Rails
   class Application
     class RoutesReloader
-      attr_reader :paths
+      attr_reader :route_sets, :paths
+      delegate :execute_if_updated, :execute, :updated?, to: :updater
 
       def initialize
-        @paths, @last_change_at = [], nil
-      end
-
-      def changed_at
-        routes_changed_at = nil
-
-        paths.each do |path|
-          config_changed_at = File.stat(path).mtime
-
-          if routes_changed_at.nil? || config_changed_at > routes_changed_at
-            routes_changed_at = config_changed_at
-          end
-        end
-
-        routes_changed_at
+        @paths      = []
+        @route_sets = []
       end
 
       def reload!
-        routes = Rails::Application.routes
-        routes.disable_clear_and_finalize = true
-
-        routes.clear!
-        paths.each { |path| load(path) }
-        ActiveSupport.on_load(:action_controller) { routes.finalize! }
-
-        nil
+        clear!
+        load_paths
+        finalize!
       ensure
-        routes.disable_clear_and_finalize = false
+        revert
       end
 
-      def reload_if_changed
-        current_change_at = changed_at
-        if @last_change_at != current_change_at
-          @last_change_at = current_change_at
-          reload!
+    private
+
+      def updater
+        @updater ||= begin
+          updater = ActiveSupport::FileUpdateChecker.new(paths) { reload! }
+          updater.execute
+          updater
+        end
+      end
+
+      def clear!
+        route_sets.each do |routes|
+          routes.disable_clear_and_finalize = true
+          routes.clear!
+        end
+      end
+
+      def load_paths
+        paths.each { |path| load(path) }
+      end
+
+      def finalize!
+        route_sets.each do |routes|
+          routes.finalize!
+        end
+      end
+
+      def revert
+        route_sets.each do |routes|
+          routes.disable_clear_and_finalize = false
         end
       end
     end

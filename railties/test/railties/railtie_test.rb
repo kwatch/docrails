@@ -1,7 +1,7 @@
 require "isolation/abstract_unit"
 
 module RailtiesTest
-  class RailtieTest < Test::Unit::TestCase
+  class RailtieTest < ActiveSupport::TestCase
     include ActiveSupport::Testing::Isolation
 
     def setup
@@ -11,19 +11,32 @@ module RailtiesTest
       require "rails/all"
     end
 
+    def teardown
+      teardown_app
+    end
+
     def app
       @app ||= Rails.application
     end
 
-    test "Rails::Railtie itself does not respond to config" do
-      assert !Rails::Railtie.respond_to?(:config)
+    test "cannot instantiate a Railtie object" do
+      assert_raise(RuntimeError) { Rails::Railtie.new }
     end
 
-    test "cannot inherit from a railtie" do
-      class Foo < Rails::Railtie ; end
-      assert_raise RuntimeError do
-        class Bar < Foo; end
+    test "Railtie provides railtie_name" do
+      begin
+        class ::FooBarBaz < Rails::Railtie ; end
+        assert_equal "foo_bar_baz", FooBarBaz.railtie_name
+      ensure
+        Object.send(:remove_const, :"FooBarBaz")
       end
+    end
+
+    test "railtie_name can be set manually" do
+      class Foo < Rails::Railtie
+        railtie_name "bar"
+      end
+      assert_equal "bar", Foo.railtie_name
     end
 
     test "config is available to railtie" do
@@ -45,16 +58,7 @@ module RailtiesTest
         config.foo.greetings = "hello"
       end
       require "#{app_path}/config/application"
-      assert_equal "hello", AppTemplate::Application.config.foo.greetings
-    end
-
-    test "railtie can add log subscribers" do
-      begin
-        class Foo < Rails::Railtie ; log_subscriber(:foo, Rails::LogSubscriber.new) ; end
-        assert_kind_of Rails::LogSubscriber, Rails::LogSubscriber.log_subscribers[0]
-      ensure
-        Rails::LogSubscriber.log_subscribers.clear
-      end
+      assert_equal "hello", Rails.application.config.foo.greetings
     end
 
     test "railtie can add to_prepare callbacks" do
@@ -90,10 +94,34 @@ module RailtiesTest
       assert !$ran_block
       require 'rake'
       require 'rake/testtask'
-      require 'rake/rdoctask'
+      require 'rdoc/task'
 
-      AppTemplate::Application.load_tasks
+      Rails.application.load_tasks
       assert $ran_block
+    end
+
+    test "rake_tasks block defined in superclass of railtie is also executed" do
+      $ran_block = []
+
+      class Rails::Railtie
+        rake_tasks do
+          $ran_block << railtie_name
+        end
+      end
+
+      class MyTie < Rails::Railtie
+        railtie_name "my_tie"
+      end
+
+      require "#{app_path}/config/environment"
+
+      assert_equal [], $ran_block
+      require 'rake'
+      require 'rake/testtask'
+      require 'rdoc/task'
+
+      Rails.application.load_tasks
+      assert $ran_block.include?("my_tie")
     end
 
     test "generators block is executed when MyApp.load_generators is called" do
@@ -108,7 +136,39 @@ module RailtiesTest
       require "#{app_path}/config/environment"
 
       assert !$ran_block
-      AppTemplate::Application.load_generators
+      Rails.application.load_generators
+      assert $ran_block
+    end
+
+    test "console block is executed when MyApp.load_console is called" do
+      $ran_block = false
+
+      class MyTie < Rails::Railtie
+        console do
+          $ran_block = true
+        end
+      end
+
+      require "#{app_path}/config/environment"
+
+      assert !$ran_block
+      Rails.application.load_console
+      assert $ran_block
+    end
+
+    test "runner block is executed when MyApp.load_runner is called" do
+      $ran_block = false
+
+      class MyTie < Rails::Railtie
+        runner do
+          $ran_block = true
+        end
+      end
+
+      require "#{app_path}/config/environment"
+
+      assert !$ran_block
+      Rails.application.load_runner
       assert $ran_block
     end
 
@@ -125,7 +185,7 @@ module RailtiesTest
       require "#{app_path}/config/environment"
       assert $ran_block
     end
-    
+
     test "we can change our environment if we want to" do
       begin
         original_env = Rails.env

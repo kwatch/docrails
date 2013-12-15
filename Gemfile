@@ -1,43 +1,95 @@
-source 'http://rubygems.org'
+source 'https://rubygems.org'
 
-gem "arel", :git => "git://github.com/rails/arel.git"
-gem "rails", :path => File.dirname(__FILE__)
+gemspec
 
-gem "rake",  ">= 0.8.7"
-gem "mocha", ">= 0.9.8"
+# This needs to be with require false as it is
+# loaded after loading the test library to
+# ensure correct loading order
+gem 'mocha', '~> 0.14', require: false
 
-group :mri do
-  gem 'json'
+gem 'rack-cache', '~> 1.2'
+gem 'bcrypt-ruby', '~> 3.1.2'
+gem 'jquery-rails', '~> 2.2.0'
+gem 'turbolinks'
+gem 'coffee-rails', '~> 4.0.0'
+gem 'arel', github: 'rails/arel'
+
+# This needs to be with require false to avoid
+# it being automatically loaded by sprockets
+gem 'uglifier', '>= 1.3.0', require: false
+
+group :doc do
+  gem 'sdoc'
+  gem 'redcarpet', '~> 2.2.2', platforms: :ruby
+  gem 'w3c_validators'
+  gem 'kindlerb'
+end
+
+# AS
+gem 'dalli', '>= 2.2.1'
+
+# Add your own local bundler stuff
+local_gemfile = File.dirname(__FILE__) + "/.Gemfile"
+instance_eval File.read local_gemfile if File.exist? local_gemfile
+
+group :test do
+  platforms :mri_19 do
+    gem 'ruby-prof', '~> 0.11.2'
+  end
+
+  platforms :mri_19, :mri_20 do
+    gem 'debugger'
+  end
+
+  gem 'benchmark-ips'
+end
+
+platforms :ruby do
   gem 'yajl-ruby'
-  gem "nokogiri", ">= 1.4.0"
+  gem 'nokogiri', '>= 1.4.5'
 
-  if RUBY_VERSION < '1.9'
-    gem "system_timer"
-    gem "ruby-debug", ">= 0.10.3"
-  elsif RUBY_VERSION < '1.9.2' && !ENV['CI']
-    gem "ruby-debug19"
+  # Needed for compiling the ActionDispatch::Journey parser
+  gem 'racc', '>=1.4.6', require: false
+
+  # AR
+  gem 'sqlite3', '~> 1.3.6'
+
+  group :db do
+    gem 'pg', '>= 0.11.0'
+    gem 'mysql', '>= 2.9.0'
+    gem 'mysql2', '>= 0.3.13'
   end
 end
 
-# AR
-gem "sqlite3-ruby", "= 1.3.0.beta.2", :require => 'sqlite3'
-
-group :db do
-  gem "pg", ">= 0.9.0"
-  gem "mysql", ">= 2.8.1"
+platforms :jruby do
+  gem 'json'
+  if ENV['AR_JDBC']
+    gem 'activerecord-jdbcsqlite3-adapter', github: 'jruby/activerecord-jdbc-adapter', branch: 'master'
+    group :db do
+      gem 'activerecord-jdbcmysql-adapter', github: 'jruby/activerecord-jdbc-adapter', branch: 'master'
+      gem 'activerecord-jdbcpostgresql-adapter', github: 'jruby/activerecord-jdbc-adapter', branch: 'master'
+    end
+  else
+    gem 'activerecord-jdbcsqlite3-adapter', '>= 1.3.0'
+    group :db do
+      gem 'activerecord-jdbcmysql-adapter', '>= 1.3.0'
+      gem 'activerecord-jdbcpostgresql-adapter', '>= 1.3.0'
+    end
+  end
 end
 
-# AP
-gem "rack-test", "0.5.3", :require => 'rack/test'
-gem "RedCloth", ">= 4.2.2"
-
-group :documentation do
-  gem 'rdoc', '2.1'
+platforms :rbx do
+  gem 'psych', '~> 2.0'
+  gem 'rubysl', '~> 2.0'
 end
 
-if ENV['CI']
-  gem "nokogiri", ">= 1.4.0"
-
-  # fcgi gem doesn't compile on 1.9
-  gem "fcgi", ">= 0.8.7" if RUBY_VERSION < '1.9.0'
+# gems that are necessary for ActiveRecord tests with Oracle database
+if ENV['ORACLE_ENHANCED']
+  platforms :ruby do
+    gem 'ruby-oci8', '>= 2.0.4'
+  end
+  gem 'activerecord-oracle_enhanced-adapter', github: 'rsim/oracle-enhanced', branch: 'master'
 end
+
+# A gem necessary for ActiveRecord tests with IBM DB
+gem 'ibm_db' if ENV['IBM_DB']

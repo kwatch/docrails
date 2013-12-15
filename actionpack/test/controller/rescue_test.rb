@@ -1,19 +1,5 @@
 require 'abstract_unit'
 
-module ActionDispatch
-  class ShowExceptions
-    private
-      def public_path
-        "#{FIXTURE_LOAD_PATH}/public"
-      end
-
-      # Silence logger
-      def logger
-        nil
-      end
-  end
-end
-
 class RescueController < ActionController::Base
   class NotAuthorized < StandardError
   end
@@ -74,14 +60,17 @@ class RescueController < ActionController::Base
     render :text => exception.message
   end
 
-  # This is a Dispatcher exception and should be in ApplicationController.
-  rescue_from ActionController::RoutingError do
-    render :text => 'no way'
+  rescue_from ActionView::TemplateError do
+    render :text => 'action_view templater error'
   end
 
-  before_filter(:only => :before_filter_raises) { raise 'umm nice' }
+  rescue_from IOError do
+    render :text => 'io error'
+  end
 
-  def before_filter_raises
+  before_action(only: :before_action_raises) { raise 'umm nice' }
+
+  def before_action_raises
   end
 
   def raises
@@ -140,6 +129,14 @@ class RescueController < ActionController::Base
   end
 
   def missing_template
+  end
+
+  def io_error_in_view
+    raise ActionView::TemplateError.new(nil, IOError.new('this is io error'))
+  end
+
+  def zero_division_error_in_view
+    raise ActionView::TemplateError.new(nil, ZeroDivisionError.new('this is zero division error'))
   end
 
   protected
@@ -228,6 +225,17 @@ class ControllerInheritanceRescueControllerTest < ActionController::TestCase
 end
 
 class RescueControllerTest < ActionController::TestCase
+
+  def test_io_error_in_view
+    get :io_error_in_view
+    assert_equal 'io error', @response.body
+  end
+
+  def test_zero_division_error_in_view
+    get :zero_division_error_in_view
+    assert_equal 'action_view templater error', @response.body
+  end
+
   def test_rescue_handler
     get :not_authorized
     assert_response :forbidden
@@ -284,7 +292,7 @@ class RescueControllerTest < ActionController::TestCase
   end
 end
 
-class RescueTest < ActionController::IntegrationTest
+class RescueTest < ActionDispatch::IntegrationTest
   class TestController < ActionController::Base
     class RecordInvalid < StandardError
       def message
@@ -325,29 +333,14 @@ class RescueTest < ActionController::IntegrationTest
     end
   end
 
-  test 'rescue routing exceptions' do
-    raiser = proc { |env| raise ActionController::RoutingError, "Did not handle the request" }
-    @app = ActionDispatch::Rescue.new(raiser) do
-      rescue_from ActionController::RoutingError, lambda { |env| [200, {"Content-Type" => "text/html"}, ["Gotcha!"]] }
-    end
-
-    get '/b00m'
-    assert_equal "Gotcha!", response.body
-  end
-
-  test 'unrescued exception' do
-    raiser = proc { |env| raise ActionController::RoutingError, "Did not handle the request" }
-    @app = ActionDispatch::Rescue.new(raiser)
-    assert_raise(ActionController::RoutingError) { get '/b00m' }
-  end
-
   private
+
     def with_test_routing
       with_routing do |set|
-        set.draw do |map|
-          match 'foo', :to => ::RescueTest::TestController.action(:foo)
-          match 'invalid', :to => ::RescueTest::TestController.action(:invalid)
-          match 'b00m', :to => ::RescueTest::TestController.action(:b00m)
+        set.draw do
+          get 'foo', :to => ::RescueTest::TestController.action(:foo)
+          get 'invalid', :to => ::RescueTest::TestController.action(:invalid)
+          get 'b00m', :to => ::RescueTest::TestController.action(:b00m)
         end
         yield
       end

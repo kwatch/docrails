@@ -1,16 +1,14 @@
-require 'active_support/core_ext/object/blank'
 require 'active_support/core_ext/hash/keys'
 require 'active_support/core_ext/object/duplicable'
+require 'action_dispatch/http/parameter_filter'
 
 module ActionDispatch
   module Http
     # Allows you to specify sensitive parameters which will be replaced from
-    # the request log by looking in all subhashes of the param hash for keys
-    # to filter. If a block is given, each key and value of the parameter
-    # hash and all subhashes is passed to it, the value or key can be replaced
-    # using String#replace or similar method.
-    #
-    # Examples:
+    # the request log by looking in the query string of the request and all
+    # subhashes of the params hash to filter. If a block is given, each key and
+    # value of the params hash and all subhashes is passed to it, the value
+    # or key can be replaced using String#replace or similar method.
     #
     #   env["action_dispatch.parameter_filter"] = [:password]
     #   => replaces the value to all keys matching /password/i with "[FILTERED]"
@@ -22,92 +20,59 @@ module ActionDispatch
     #     v.reverse! if k =~ /secret/i
     #   end
     #   => reverses the value to all keys matching /secret/i
-    #
     module FilterParameters
-      extend ActiveSupport::Concern
+      ENV_MATCH = [/RAW_POST_DATA/, "rack.request.form_vars"] # :nodoc:
+      NULL_PARAM_FILTER = ParameterFilter.new # :nodoc:
+      NULL_ENV_FILTER   = ParameterFilter.new ENV_MATCH # :nodoc:
 
-      @@compiled_parameter_filter_for = {}
+      def initialize(env)
+        super
+        @filtered_parameters = nil
+        @filtered_env        = nil
+        @filtered_path       = nil
+      end
 
       # Return a hash of parameters with all sensitive data replaced.
       def filtered_parameters
-        @filtered_parameters ||= if filtering_parameters?
-          process_parameter_filter(parameters)
-        else
-          parameters.dup
-        end
+        @filtered_parameters ||= parameter_filter.filter(parameters)
       end
-      alias :fitered_params :filtered_parameters
 
       # Return a hash of request.env with all sensitive data replaced.
       def filtered_env
-        filtered_env = @env.dup
-        filtered_env.each do |key, value|
-          if (key =~ /RAW_POST_DATA/i)
-            filtered_env[key] = '[FILTERED]'
-          elsif value.is_a?(Hash)
-            filtered_env[key] = process_parameter_filter(value)
-          end
-        end
-        filtered_env
+        @filtered_env ||= env_filter.filter(@env)
+      end
+
+      # Reconstructed a path with all sensitive GET parameters replaced.
+      def filtered_path
+        @filtered_path ||= query_string.empty? ? path : "#{path}?#{filtered_query_string}"
       end
 
     protected
 
-      def filtering_parameters? #:nodoc:
-        @env["action_dispatch.parameter_filter"].present?
+      def parameter_filter
+        parameter_filter_for @env.fetch("action_dispatch.parameter_filter") {
+          return NULL_PARAM_FILTER
+        }
       end
 
-      def process_parameter_filter(params) #:nodoc:
-        compiled_parameter_filter_for(@env["action_dispatch.parameter_filter"]).call(params)
+      def env_filter
+        user_key = @env.fetch("action_dispatch.parameter_filter") {
+          return NULL_ENV_FILTER
+        }
+        parameter_filter_for(Array(user_key) + ENV_MATCH)
       end
 
-      def compile_parameter_filter(filters) #:nodoc:
-        strings, regexps, blocks = [], [], []
-
-        filters.each do |item|
-          case item
-          when NilClass
-          when Proc
-            blocks << item
-          when Regexp
-            regexps << item
-          else
-            strings << item.to_s
-          end
-        end
-
-        regexps << Regexp.new(strings.join('|'), true) unless strings.empty?
-        [regexps, blocks]
+      def parameter_filter_for(filters)
+        ParameterFilter.new(filters)
       end
 
-      def compiled_parameter_filter_for(filters) #:nodoc:
-        @@compiled_parameter_filter_for[filters] ||= begin
-          regexps, blocks = compile_parameter_filter(filters)
-
-          lambda do |original_params|
-            filtered_params = {}
-
-            original_params.each do |key, value|
-              if regexps.find { |r| key =~ r }
-                value = '[FILTERED]'
-              elsif value.is_a?(Hash)
-                value = process_parameter_filter(value)
-              elsif value.is_a?(Array)
-                value = value.map { |v| v.is_a?(Hash) ? process_parameter_filter(v) : v }
-              elsif blocks.present?
-                key = key.dup
-                value = value.dup if value.duplicable?
-                blocks.each { |b| b.call(key, value) }
-              end
-
-              filtered_params[key] = value
-            end
-
-            filtered_params
-          end
+      KV_RE   = '[^&;=]+'
+      PAIR_RE = %r{(#{KV_RE})=(#{KV_RE})}
+      def filtered_query_string
+        query_string.gsub(PAIR_RE) do |_|
+          parameter_filter.filter([[$1, $2]]).first.join("=")
         end
       end
-
     end
   end
 end

@@ -8,8 +8,20 @@ rescue LoadError, NameError
 else
 
 require 'active_support/time'
+require 'active_support/json'
 
-class MessageVerifierTest < Test::Unit::TestCase
+class MessageVerifierTest < ActiveSupport::TestCase
+  
+  class JSONSerializer
+    def dump(value)
+      ActiveSupport::JSON.encode(value)
+    end
+
+    def load(value)
+      ActiveSupport::JSON.decode(value)
+    end
+  end
+  
   def setup
     @verifier = ActiveSupport::MessageVerifier.new("Hey, I'm a secret!")
     @data = { :some => "data", :now => Time.local(2010) }
@@ -31,7 +43,18 @@ class MessageVerifierTest < Test::Unit::TestCase
     assert_not_verified("#{data}--#{hash.reverse}")
     assert_not_verified("purejunk")
   end
-
+  
+  def test_alternative_serialization_method
+    prev = ActiveSupport.use_standard_json_time_format
+    ActiveSupport.use_standard_json_time_format = true
+    verifier = ActiveSupport::MessageVerifier.new("Hey, I'm a secret!", :serializer => JSONSerializer.new)
+    message = verifier.generate({ :foo => 123, 'bar' => Time.utc(2010) })
+    exp = { "foo" => 123, "bar" => "2010-01-01T00:00:00.000Z" }
+    assert_equal exp, verifier.verify(message)
+  ensure
+    ActiveSupport.use_standard_json_time_format = prev
+  end
+  
   def assert_not_verified(message)
     assert_raise(ActiveSupport::MessageVerifier::InvalidSignature) do
       @verifier.verify(message)
